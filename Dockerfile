@@ -5,6 +5,9 @@ WORKDIR /app
 # Copy mã nguồn dự án vào container
 COPY --chown=gradle:gradle . .
 
+# Cấp quyền thực thi cho gradlew (Sửa lỗi Permission Denied khi đẩy code từ Windows)
+RUN chmod +x gradlew
+
 # Thực hiện biên dịch sinh file .jar và bỏ qua unit test để tăng tốc build khi deploy
 RUN ./gradlew build -x test --no-daemon
 
