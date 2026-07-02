@@ -1,0 +1,19 @@
+# Bỏ qua các thư mục build và cache cục bộ để tăng tốc build Docker
+.gradle/
+build/
+bin/
+out/
+
+# Bỏ qua các cấu hình IDE
+.vscode/
+.idea/
+*.iml
+
+# Bỏ qua thư mục Git
+.git/
+.gitignore
+
+# BỎ QUA FILE BẢO MẬT CỤC BỘ (Quan trọng nhất!)
+src/main/resources/application-local.properties
+.env
+.env.*
