@@ -26,9 +26,9 @@ public interface FocusSessionRepository extends JpaRepository<FocusSession, UUID
 
         // Get histories session with params
         @Query("SELECT f FROM FocusSession f WHERE f.profile.id = :profileId " +
-                        "AND (:status IS NULL OR f.status = :status) " +
-                        "AND (:startDate IS NULL OR f.endedAt >= :startDate) " +
-                        "AND (:endDate IS NULL OR f.endedAt <= :endDate) " +
+                        "AND (cast(:status as String) IS NULL OR f.status = :status) " +
+                        "AND (cast(:startDate as timestamp) IS NULL OR f.endedAt >= :startDate) " +
+                        "AND (cast(:endDate as timestamp) IS NULL OR f.endedAt <= :endDate) " +
                         "ORDER BY f.createdAt DESC")
         Page<FocusSession> findFilteredActivities(
                         @Param("profileId") UUID profileId,
