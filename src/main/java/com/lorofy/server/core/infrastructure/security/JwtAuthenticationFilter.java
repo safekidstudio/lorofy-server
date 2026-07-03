@@ -31,10 +31,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         try {
             // Get token from header
-            String jwt = getJwtFromRequest(request);
+            String jwt = tokenProvider.resolveToken(request.getHeader("Authorization"));
 
             // Validate token
-            if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
+            if (jwt != null && tokenProvider.validateToken(jwt)) {
                 // Check if the token is in the blacklist
                 String blacklistKey = RedisKeyBuilder.getJwtBlacklistKey(jwt);
                 Boolean isBlacklisted = redisTemplate.hasKey(blacklistKey);
@@ -59,14 +59,4 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // Continue the filter chain
         filterChain.doFilter(request, response);
     }
-
-    // Helper method to extract JWT token from HTTP request
-    private String getJwtFromRequest(HttpServletRequest request) {
-        String bearerToken = request.getHeader("Authorization");
-        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
-        }
-        return null;
-    }
-
 }

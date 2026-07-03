@@ -9,6 +9,7 @@ import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import io.jsonwebtoken.security.SignatureException;
 import io.jsonwebtoken.*;
@@ -117,5 +118,12 @@ public class JwtTokenProvider {
         SimpleGrantedAuthority authority = new SimpleGrantedAuthority(role);
 
         return new UserPrincipal(id, email, "", List.of(authority));
+    }
+
+    public String resolveToken(String bearerToken) {
+        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        return null;
     }
 }

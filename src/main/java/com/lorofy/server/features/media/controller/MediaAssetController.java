@@ -3,6 +3,7 @@ package com.lorofy.server.features.media.controller;
 import org.springframework.http.MediaType;
 
 import com.lorofy.server.core.infrastructure.security.UserPrincipal;
+import com.lorofy.server.core.response.ApiResponse;
 import com.lorofy.server.features.media.entity.MediaAsset;
 import com.lorofy.server.features.media.service.MediaAssetService;
 
@@ -23,11 +24,11 @@ public class MediaAssetController {
     private final MediaAssetService mediaAssetService;
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<MediaAsset> uploadFile(
+    public ResponseEntity<ApiResponse<MediaAsset>> uploadFile(
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal UserPrincipal currentUser) throws IOException {
 
         MediaAsset asset = mediaAssetService.uploadAvatar(file, currentUser.getId());
-        return ResponseEntity.ok(asset);
+        return ResponseEntity.ok(ApiResponse.success(asset, "Uploaded successfully"));
     }
 }

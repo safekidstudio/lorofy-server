@@ -1,5 +1,6 @@
 package com.lorofy.server.features.auth.controller;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.util.StringUtils;
@@ -9,7 +10,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.lorofy.server.core.infrastructure.security.PublicEndpoint;
 import com.lorofy.server.core.infrastructure.security.UserPrincipal;
+import com.lorofy.server.core.response.ApiResponse;
 import com.lorofy.server.features.auth.dto.AuthResponse;
 import com.lorofy.server.features.auth.dto.LoginRequest;
 import com.lorofy.server.features.auth.dto.RegisterRequest;
@@ -31,32 +34,34 @@ public class AuthController {
     private final ProfileService profileService;
 
     @PostMapping("/register")
-    public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
+    @PublicEndpoint
+    public ResponseEntity<ApiResponse<Void>> register(@Valid @RequestBody RegisterRequest request) {
         authService.register(request);
-        return ResponseEntity.ok("User registered successfully");
+        return ResponseEntity.ok(ApiResponse.success(null, "Registered successfully"));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+    @PublicEndpoint
+    public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success(response, "Logged in successfully"));
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<String> logout(HttpServletRequest request) {
+    public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             String jwt = bearerToken.substring(7);
             authService.logout(jwt);
-            return ResponseEntity.ok("Logged out successfully");
+            return ResponseEntity.ok(ApiResponse.success(null, "Logged out successfully"));
         }
-        return ResponseEntity.badRequest().body("Invalid token");
+        return ResponseEntity.badRequest().body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "Invalid token"));
     }
 
     @GetMapping("/me")
-    public ResponseEntity<ProfileResponse> getMyProfile(
+    public ResponseEntity<ApiResponse<ProfileResponse>> getMyProfile(
             @AuthenticationPrincipal UserPrincipal currentUser) {
         ProfileResponse response = profileService.getProfile(currentUser.getId());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success(response, "Get profile successfully"));
     }
 }

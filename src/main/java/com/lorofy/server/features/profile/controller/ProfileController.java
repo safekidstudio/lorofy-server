@@ -1,8 +1,10 @@
 package com.lorofy.server.features.profile.controller;
 
 import com.lorofy.server.core.infrastructure.security.UserPrincipal;
+import com.lorofy.server.core.response.ApiResponse;
 import com.lorofy.server.features.profile.dto.OnboardProfileRequest;
 import com.lorofy.server.features.profile.dto.ProfileResponse;
+import com.lorofy.server.features.profile.dto.UpdateProfileRequest;
 import com.lorofy.server.features.profile.service.ProfileService;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,10 +23,18 @@ public class ProfileController {
     private final ProfileService profileService;
 
     @PutMapping("/onboard")
-    public ResponseEntity<ProfileResponse> onboardProfile(
+    public ResponseEntity<ApiResponse<ProfileResponse>> onboardProfile(
             @AuthenticationPrincipal UserPrincipal currentUser,
             @Valid @RequestBody OnboardProfileRequest request) {
         ProfileResponse response = profileService.onboardProfile(currentUser.getId(), request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success(response, "Profile onboarded successfully"));
+    }
+
+    @PatchMapping("/update")
+    public ResponseEntity<ApiResponse<ProfileResponse>> updateProfile(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @Valid @RequestBody UpdateProfileRequest request) {
+        ProfileResponse response = profileService.updateProfile(currentUser.getId(), request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Profile updated successfully"));
     }
 }
