@@ -4,15 +4,22 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.lorofy.server.core.response.PageResponse;
 import com.lorofy.server.features.focus.constant.SettingKeys;
 import com.lorofy.server.features.focus.dto.EndSessionRequest;
 import com.lorofy.server.features.focus.dto.FocusSessionResponse;
+import com.lorofy.server.features.focus.dto.FocusStatsResponse;
 import com.lorofy.server.features.focus.dto.StartSessionRequest;
 import com.lorofy.server.features.focus.entity.Category;
 import com.lorofy.server.features.focus.entity.FocusSession;
@@ -58,7 +65,7 @@ public class FocusSessionService {
 
         session = focusSessionRepository.save(session);
 
-        return mapToResponse(session, 0, 0);
+        return mapToResponse(session);
     }
 
     @Transactional
@@ -73,7 +80,7 @@ public class FocusSessionService {
 
         session = focusSessionRepository.save(session);
 
-        return mapToResponse(session, 0, 0);
+        return mapToResponse(session);
 
     }
 
@@ -97,6 +104,9 @@ public class FocusSessionService {
         int earnedPoints = (int) Math.round(request.getActualMinutes() * basePointsPerMin * multiplier);
         int earnedCoins = (int) Math.round(request.getActualMinutes() * baseCoinsPerMin * multiplier);
 
+        session.setEarnedPoints(earnedPoints);
+        session.setEarnedCoins(earnedCoins);
+
         // Update profile
         Profile profile = session.getProfile();
         profile.setRankPoints(profile.getRankPoints() + earnedPoints);
@@ -107,7 +117,7 @@ public class FocusSessionService {
         updateSreak(profile);
         session = focusSessionRepository.save(session);
 
-        return mapToResponse(session, earnedPoints, earnedCoins);
+        return mapToResponse(session);
     }
 
     @Transactional
@@ -125,7 +135,105 @@ public class FocusSessionService {
 
         session = focusSessionRepository.save(session);
 
-        return mapToResponse(session, 0, 0);
+        return mapToResponse(session);
+    }
+
+    // HISTORY FOCUS SESSION
+    @Transactional(readOnly = true)
+    public PageResponse<FocusSessionResponse> getHistory(
+            UUID userId,
+            SessionStatus status,
+            OffsetDateTime startDate,
+            OffsetDateTime endDate,
+            Pageable pageable) {
+
+        Profile profile = profileRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
+
+        Page<FocusSession> page = focusSessionRepository.findFilteredActivities(
+                profile.getId(), status, startDate, endDate, pageable);
+
+        Page<FocusSessionResponse> responsePage = page.map(this::mapToResponse);
+        return PageResponse.from(responsePage);
+    }
+
+    // FOCUS SESSION STATS
+    @Transactional(readOnly = true)
+    public FocusStatsResponse getStats(UUID userId) {
+        Profile profile = profileRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
+        List<FocusSession> allSessions = focusSessionRepository.findAllByProfileId(profile.getId());
+        // Lọc danh sách hoàn thành và thất bại
+        List<FocusSession> completed = allSessions.stream()
+                .filter(s -> s.getStatus() == SessionStatus.COMPLETED)
+                .collect(Collectors.toList());
+        List<FocusSession> failed = allSessions.stream()
+                .filter(s -> s.getStatus() == SessionStatus.FAILED)
+                .collect(Collectors.toList());
+        int totalFocusMins = completed.stream().mapToInt(FocusSession::getActualMinutes).sum();
+        // 2.1 Tính toán tỷ lệ phân bổ theo Category
+        List<FocusStatsResponse.CategoryStat> categoryStats = completed.stream()
+                .collect(Collectors.groupingBy(
+                        s -> s.getCategory() != null ? s.getCategory().getId()
+                                : UUID.fromString("00000000-0000-0000-0000-000000000000")))
+                .values().stream()
+                .map(list -> {
+                    FocusSession first = list.get(0);
+                    String name = first.getCategory() != null ? first.getCategory().getName() : "Others";
+                    String color = first.getCategory() != null ? first.getCategory().getColorHex() : "#9E9E9E";
+                    int minutes = list.stream().mapToInt(FocusSession::getActualMinutes).sum();
+                    return new FocusStatsResponse.CategoryStat(name, color, minutes, list.size());
+                })
+                .collect(Collectors.toList());
+        // 2.2 Tính toán biểu đồ tiến trình 7 ngày gần nhất (Theo múi giờ local của
+        // User)
+        ZoneId zoneId = ZoneId.of(profile.getTimezone() != null ? profile.getTimezone() : "Asia/Ho_Chi_Minh");
+        LocalDate today = LocalDate.now(zoneId);
+        List<LocalDate> last7Days = IntStream.range(0, 7)
+                .mapToObj(today::minusDays)
+                .sorted()
+                .collect(Collectors.toList());
+        List<FocusStatsResponse.DailyProgress> weeklyProgress = last7Days.stream()
+                .map(date -> {
+                    int mins = completed.stream()
+                            .filter(s -> s.getEndedAt().atZoneSameInstant(zoneId).toLocalDate().equals(date))
+                            .mapToInt(FocusSession::getActualMinutes)
+                            .sum();
+                    return new FocusStatsResponse.DailyProgress(date.toString(), mins);
+                })
+                .collect(Collectors.toList());
+        return FocusStatsResponse.builder()
+                .totalCompletedSessions(completed.size())
+                .totalFailedSessions(failed.size())
+                .totalFocusMinutes(totalFocusMins)
+                .currentStreak(profile.getCurrentStreak())
+                .longestStreak(profile.getLongestStreak())
+                .categoryBreakdown(categoryStats)
+                .weeklyProgress(weeklyProgress)
+                .build();
+    }
+
+    // CALENDAR
+    @Transactional(readOnly = true)
+    public List<String> getCalendarDates(UUID userId, int year, int month) {
+        Profile profile = profileRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
+        ZoneId zoneId = ZoneId.of(profile.getTimezone() != null ? profile.getTimezone() : "Asia/Ho_Chi_Minh");
+        // Tính khoảng thời gian bắt đầu và kết thúc tháng ở giờ địa phương, rồi đổi
+        // sang UTC cho Database Query
+        LocalDate startLocalDate = LocalDate.of(year, month, 1);
+        LocalDate endLocalDate = startLocalDate.plusMonths(1).minusDays(1);
+        OffsetDateTime startUtc = startLocalDate.atStartOfDay(zoneId).toOffsetDateTime();
+        OffsetDateTime endUtc = endLocalDate.plusDays(1).atStartOfDay(zoneId).minusNanos(1).toOffsetDateTime();
+        List<FocusSession> sessions = focusSessionRepository.findAllByProfileIdAndStatusAndEndedAtBetween(
+                profile.getId(), SessionStatus.COMPLETED, startUtc, endUtc);
+        // Chuyển đổi ngược từ UTC sang local ngày của user và lấy danh sách các ngày
+        // duy nhất
+        return sessions.stream()
+                .map(s -> s.getEndedAt().atZoneSameInstant(zoneId).toLocalDate().toString())
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
     }
 
     private FocusSession getVerifiedSession(UUID userId, UUID sessionId) {
@@ -178,7 +286,7 @@ public class FocusSessionService {
         return settingService.getDoubleSetting(key, 1.0);
     }
 
-    private FocusSessionResponse mapToResponse(FocusSession session, int earnedPoints, int earnedCoins) {
+    private FocusSessionResponse mapToResponse(FocusSession session) {
         return FocusSessionResponse.builder()
                 .id(session.getId())
                 .profileId(session.getProfile().getId())
@@ -193,8 +301,8 @@ public class FocusSessionService {
                 .startedAt(session.getStartedAt())
                 .endedAt(session.getEndedAt())
                 .friendSessionId(session.getFriendSessionId())
-                .earnedPoints(earnedPoints)
-                .earnedCoins(earnedCoins)
+                .earnedPoints(session.getEarnedPoints())
+                .earnedCoins(session.getEarnedCoins())
                 .build();
     }
 

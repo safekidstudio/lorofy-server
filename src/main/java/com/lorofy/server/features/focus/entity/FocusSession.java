@@ -52,13 +52,16 @@ public class FocusSession {
     @Column(name = "planned_minutes", nullable = false)
     private int plannedMinutes;
 
+    @Builder.Default
     @Column(name = "actual_minutes", nullable = false)
     private int actualMinutes = 0;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private SessionStatus status = SessionStatus.RUNNING;
 
+    @Builder.Default
     @Column(name = "pause_count")
     private int pauseCount = 0;
 
@@ -73,6 +76,14 @@ public class FocusSession {
 
     @Column(name = "friend_session_id")
     private UUID friendSessionId;
+
+    @Builder.Default
+    @Column(name = "earned_points")
+    private int earnedPoints = 0;
+
+    @Builder.Default
+    @Column(name = "earned_coins")
+    private int earnedCoins = 0;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
