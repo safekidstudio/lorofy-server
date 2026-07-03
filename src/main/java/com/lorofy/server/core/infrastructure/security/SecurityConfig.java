@@ -1,4 +1,4 @@
-package com.lorofy.server.core.config;
+package com.lorofy.server.core.infrastructure.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,9 +12,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-import com.lorofy.server.core.security.CustomUserDetailsService;
-import com.lorofy.server.core.security.JwtAuthenticationFilter;
 
 import lombok.RequiredArgsConstructor;
 

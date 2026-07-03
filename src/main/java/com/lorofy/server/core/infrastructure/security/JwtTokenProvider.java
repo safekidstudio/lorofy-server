@@ -1,11 +1,13 @@
-package com.lorofy.server.core.security;
+package com.lorofy.server.core.infrastructure.security;
 
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
 import javax.crypto.SecretKey;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
 import io.jsonwebtoken.security.SignatureException;
@@ -90,5 +92,30 @@ public class JwtTokenProvider {
             log.error("Invalid JWT claims");
             return false;
         }
+    }
+
+    public Date getExpirationDateFromJWT(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        return claims.getExpiration();
+    }
+
+    public UserPrincipal getUserPrincipalFromJWT(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+
+        UUID id = UUID.fromString(claims.getSubject());
+        String email = claims.get("email", String.class);
+        String role = claims.get("role", String.class);
+
+        SimpleGrantedAuthority authority = new SimpleGrantedAuthority(role);
+
+        return new UserPrincipal(id, email, "", List.of(authority));
     }
 }

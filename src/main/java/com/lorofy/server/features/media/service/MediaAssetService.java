@@ -1,6 +1,6 @@
 package com.lorofy.server.features.media.service;
 
-import com.lorofy.server.core.storage.StorageService;
+import com.lorofy.server.core.infrastructure.storage.StorageService;
 import com.lorofy.server.features.media.entity.MediaAsset;
 import com.lorofy.server.features.profile.entity.Profile;
 import com.lorofy.server.features.profile.repository.ProfileRepository;

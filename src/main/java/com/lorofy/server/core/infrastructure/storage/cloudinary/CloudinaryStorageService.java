@@ -1,9 +1,8 @@
-package com.lorofy.server.core.storage.cloudinary;
-
-import com.lorofy.server.core.storage.StorageService;
+package com.lorofy.server.core.infrastructure.storage.cloudinary;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import com.lorofy.server.core.infrastructure.storage.StorageService;
 import com.lorofy.server.features.media.entity.MediaAsset;
 import com.lorofy.server.features.media.repository.MediaAssetRepository;
 import lombok.RequiredArgsConstructor;

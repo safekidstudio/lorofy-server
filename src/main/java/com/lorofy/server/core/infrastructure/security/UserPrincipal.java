@@ -1,4 +1,4 @@
-package com.lorofy.server.core.security;
+package com.lorofy.server.core.infrastructure.security;
 
 import java.util.Collection;
 import java.util.List;

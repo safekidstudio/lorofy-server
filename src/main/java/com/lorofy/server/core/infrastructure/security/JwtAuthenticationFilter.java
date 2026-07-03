@@ -1,15 +1,15 @@
-package com.lorofy.server.core.security;
+package com.lorofy.server.core.infrastructure.security;
 
 import java.io.IOException;
-import java.util.UUID;
-
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.lorofy.server.core.infrastructure.redis.RedisKeyBuilder;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -24,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
-    private final CustomUserDetailsService customUserDetailsService;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -35,13 +35,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // Validate token
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
-                // Get userId from Token
-                UUID userId = tokenProvider.getUserIdFromJWT(jwt);
-                // Get UserDetails from userId
-                UserDetails userDetails = customUserDetailsService.loadUserById(userId);
+                // Check if the token is in the blacklist
+                String blacklistKey = RedisKeyBuilder.getJwtBlacklistKey(jwt);
+                Boolean isBlacklisted = redisTemplate.hasKey(blacklistKey);
+                if (Boolean.TRUE.equals(isBlacklisted)) {
+                    log.warn("Unauthorized request: JWT token is blacklisted");
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+                UserPrincipal userPrincipal = tokenProvider.getUserPrincipalFromJWT(jwt);
                 // Create authentication in Spring Security
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
+                        userPrincipal, null, userPrincipal.getAuthorities());
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 // Set authentication in SecurityContextHolder, so that it is accessible to
                 // other parts of the application

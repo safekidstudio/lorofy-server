@@ -1,4 +1,4 @@
-package com.lorofy.server.core.storage.cloudinary;
+package com.lorofy.server.core.infrastructure.storage.cloudinary;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;

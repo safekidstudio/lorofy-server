@@ -1,4 +1,4 @@
-package com.lorofy.server.core.storage;
+package com.lorofy.server.core.infrastructure.storage;
 
 import com.lorofy.server.features.media.entity.MediaAsset;
 import org.springframework.web.multipart.MultipartFile;

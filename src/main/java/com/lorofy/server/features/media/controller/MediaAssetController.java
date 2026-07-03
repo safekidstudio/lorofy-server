@@ -1,9 +1,12 @@
 package com.lorofy.server.features.media.controller;
 
 import org.springframework.http.MediaType;
-import com.lorofy.server.core.security.UserPrincipal;
+
+import com.lorofy.server.core.infrastructure.security.UserPrincipal;
 import com.lorofy.server.features.media.entity.MediaAsset;
 import com.lorofy.server.features.media.service.MediaAssetService;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -14,6 +17,7 @@ import java.io.IOException;
 @RestController
 @RequestMapping("/media")
 @RequiredArgsConstructor
+@Tag(name = "Media", description = "Media Management APIs")
 public class MediaAssetController {
 
     private final MediaAssetService mediaAssetService;

@@ -1,9 +1,11 @@
 package com.lorofy.server.features.profile.controller;
 
-import com.lorofy.server.core.security.UserPrincipal;
+import com.lorofy.server.core.infrastructure.security.UserPrincipal;
 import com.lorofy.server.features.profile.dto.OnboardProfileRequest;
 import com.lorofy.server.features.profile.dto.ProfileResponse;
 import com.lorofy.server.features.profile.service.ProfileService;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/profiles")
 @RequiredArgsConstructor
+@Tag(name = "Profile", description = "Profile Management APIs")
 public class ProfileController {
 
     private final ProfileService profileService;

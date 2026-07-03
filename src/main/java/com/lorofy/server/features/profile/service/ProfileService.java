@@ -2,10 +2,12 @@ package com.lorofy.server.features.profile.service;
 
 import com.lorofy.server.features.profile.dto.OnboardProfileRequest;
 import com.lorofy.server.features.profile.dto.ProfileResponse;
+import com.lorofy.server.features.profile.dto.UpdateProfileRequest;
 import com.lorofy.server.features.profile.entity.Country;
 import com.lorofy.server.features.profile.entity.Profile;
 import com.lorofy.server.features.profile.repository.CountryRepository;
 import com.lorofy.server.features.profile.repository.ProfileRepository;
+import com.lorofy.server.core.infrastructure.storage.MediaAssetResolver;
 import com.lorofy.server.features.media.entity.MediaAsset;
 import com.lorofy.server.features.media.repository.MediaAssetRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ public class ProfileService {
     private final ProfileRepository profileRepository;
     private final CountryRepository countryRepository;
     private final MediaAssetRepository mediaAssetRepository;
+    private final MediaAssetResolver mediaAssetResolver;
 
     @Transactional
     public ProfileResponse onboardProfile(UUID userId, OnboardProfileRequest request) {
@@ -49,6 +52,34 @@ public class ProfileService {
         return mapToResponse(profile);
     }
 
+    @Transactional
+    public ProfileResponse updateProfile(UUID userId, UpdateProfileRequest request) {
+        Profile profile = profileRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
+
+        if (!profile.isOnboarded()) {
+            throw new IllegalArgumentException("Please onboard profile first");
+        }
+
+        if (request.getDisplayName() != null) {
+            profile.setDisplayName(request.getDisplayName());
+        }
+
+        if (request.getTimezone() != null) {
+            profile.setTimezone(request.getTimezone());
+        }
+
+        if (request.getAvatarAssetId() != null) {
+            MediaAsset avatar = mediaAssetRepository.findById(request.getAvatarAssetId())
+                    .orElseThrow(() -> new IllegalArgumentException("Avatar asset not found"));
+            profile.setAvatarAsset(avatar);
+        }
+
+        profile = profileRepository.save(profile);
+
+        return mapToResponse(profile);
+    }
+
     @Transactional(readOnly = true)
     public ProfileResponse getProfile(UUID userId) {
         Profile profile = profileRepository.findByUserId(userId)
@@ -57,9 +88,7 @@ public class ProfileService {
     }
 
     private ProfileResponse mapToResponse(Profile profile) {
-        // Tạm thời trả về assetKey làm url, sau này ta sẽ dùng MediaAssetResolver tự
-        // sinh link CDN đầy đủ
-        String avatarUrl = profile.getAvatarAsset() != null ? profile.getAvatarAsset().getAssetKey() : null;
+        String avatarUrl = mediaAssetResolver.resolveUrl(profile.getAvatarAsset());
 
         return ProfileResponse.builder()
                 .id(profile.getId())
