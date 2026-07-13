@@ -17,7 +17,10 @@ import com.lorofy.server.features.auth.dto.AuthResponse;
 import com.lorofy.server.features.auth.dto.LoginRequest;
 import com.lorofy.server.features.auth.dto.RefreshTokenRequest;
 import com.lorofy.server.features.auth.dto.RegisterRequest;
+import com.lorofy.server.features.auth.dto.SendOtpRequest;
+import com.lorofy.server.features.auth.dto.VerifyOtpRequest;
 import com.lorofy.server.features.auth.service.AuthService;
+import com.lorofy.server.features.auth.service.OtpService;
 import com.lorofy.server.features.profile.dto.ProfileResponse;
 import com.lorofy.server.features.profile.service.ProfileService;
 
@@ -33,6 +36,21 @@ import lombok.RequiredArgsConstructor;
 public class AuthController {
     private final AuthService authService;
     private final ProfileService profileService;
+    private final OtpService otpService;
+
+    @PostMapping("/register/send-otp")
+    @PublicEndpoint
+    public ResponseEntity<ApiResponse<Void>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
+        authService.sendOtpForRegistration(request.getEmail());
+        return ResponseEntity.ok(ApiResponse.success(null, "OTP sent successfully to " + request.getEmail()));
+    }
+
+    @PostMapping("/register/verify-otp")
+    @PublicEndpoint
+    public ResponseEntity<ApiResponse<String>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        String signupToken = otpService.verifyOtp(request.getEmail(), request.getOtpCode());
+        return ResponseEntity.ok(ApiResponse.success(signupToken, "OTP verified successfully"));
+    }
 
     @PostMapping("/register")
     @PublicEndpoint

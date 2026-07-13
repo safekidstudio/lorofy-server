@@ -1,18 +1,13 @@
 package com.lorofy.server.features.auth.dto;
 
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 @Data
 public class RegisterRequest {
-    @NotBlank(message = "Email is required")
-    @Email(message = "Email is invalid")
-    @Size(max = 100, message = "Email must be less than 100 characters")
-    private String email;
+    @NotBlank(message = "Signup token is required")
+    private String signupToken;
 
     @NotBlank(message = "Password is required")
     @Size(min = 6, max = 50, message = "Password must be between 6 and 50 characters")

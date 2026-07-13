@@ -43,16 +43,18 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final OtpService otpService;
 
     @Transactional
     public void register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email is already registered: " + request.getEmail());
+        String email = otpService.getEmailBySignupToken(request.getSignupToken());
+        if (userRepository.existsByEmail(email)) {
+            throw new IllegalArgumentException("Email is already registered: " + email);
         }
 
         // Create and save new user (Password will be hashed)
         User user = User.builder()
-                .email(request.getEmail())
+                .email(email)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(Role.USER)
                 .isEnabled(true)
@@ -60,12 +62,13 @@ public class AuthService {
 
         user = userRepository.save(user);
 
-        String autoUsername = generateUniqueUsername(request.getEmail());
+        String autoUsername = generateUniqueUsername(email);
 
         // Create and save new profile for the user
         Profile profile = Profile.builder()
                 .user(user)
                 .username(autoUsername)
+                .timezone("Asia/Ho_Chi_Minh")
                 .country(Country.builder().code(ProfileConstants.DEFAULT_COUNTRY_CODE).build())
                 .isAnonymous(false)
                 .rankPoints(0)
@@ -76,6 +79,8 @@ public class AuthService {
                 .build();
 
         profileRepository.save(profile);
+
+        otpService.clearSignupToken(request.getSignupToken());
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -183,6 +188,16 @@ public class AuthService {
             }
         }
         return username;
+    }
+
+    public void sendOtpForRegistration(String email) {
+        // 1. Kiểm tra xem email đã tồn tại trong DB chưa
+        if (userRepository.existsByEmail(email)) {
+            throw new IllegalArgumentException("Email is already registered: " + email);
+        }
+
+        // 2. Nếu chưa tồn tại, tiến hành gửi OTP
+        otpService.generateOtpAndSendEmail(email);
     }
 
 }
