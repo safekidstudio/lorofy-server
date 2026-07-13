@@ -15,6 +15,7 @@ import com.lorofy.server.core.infrastructure.security.UserPrincipal;
 import com.lorofy.server.core.response.ApiResponse;
 import com.lorofy.server.features.auth.dto.AuthResponse;
 import com.lorofy.server.features.auth.dto.LoginRequest;
+import com.lorofy.server.features.auth.dto.RefreshTokenRequest;
 import com.lorofy.server.features.auth.dto.RegisterRequest;
 import com.lorofy.server.features.auth.service.AuthService;
 import com.lorofy.server.features.profile.dto.ProfileResponse;
@@ -45,6 +46,13 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
         return ResponseEntity.ok(ApiResponse.success(response, "Logged in successfully"));
+    }
+
+    @PostMapping("/refresh")
+    @PublicEndpoint
+    public ResponseEntity<ApiResponse<AuthResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        AuthResponse response = authService.refreshToken(request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Token refreshed successfully"));
     }
 
     @PostMapping("/logout")

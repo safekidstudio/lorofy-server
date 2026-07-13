@@ -46,4 +46,38 @@ public interface FocusSessionRepository extends JpaRepository<FocusSession, UUID
                         SessionStatus status,
                         OffsetDateTime start,
                         OffsetDateTime end);
+
+        // Get leaderboard data with params
+        @Query("SELECT fs.profile, SUM(fs.earnedPoints) as totalPoints " +
+                        "FROM FocusSession fs " +
+                        "WHERE fs.status = 'COMPLETED' " +
+                        "AND fs.endedAt BETWEEN :start AND :end " +
+                        "AND (cast(:countryCode as String) IS NULL OR fs.profile.country.code = :countryCode) " +
+                        "GROUP BY fs.profile " +
+                        "ORDER BY totalPoints DESC")
+        Page<Object[]> findLeaderboardData(
+                        @Param("start") OffsetDateTime start,
+                        @Param("end") OffsetDateTime end,
+                        @Param("countryCode") String countryCode,
+                        Pageable pageable);
+
+        // Get points of profile in specific date range
+        @Query("SELECT COALESCE(SUM(fs.earnedPoints), 0) FROM FocusSession fs " +
+                        "WHERE fs.profile.id = :profileId AND fs.status = 'COMPLETED' AND fs.endedAt BETWEEN :start AND :end")
+        long sumEarnedPointsByTimeframe(
+                        @Param("profileId") UUID profileId,
+                        @Param("start") OffsetDateTime start,
+                        @Param("end") OffsetDateTime end);
+
+        // Get rank of profile in specific date range
+        @Query("SELECT COUNT(p) + 1 FROM Profile p WHERE " +
+                        "(SELECT COALESCE(SUM(fs.earnedPoints), 0) FROM FocusSession fs WHERE fs.profile.id = p.id AND fs.status = 'COMPLETED' AND fs.endedAt BETWEEN :start AND :end) > :userScore "
+                        +
+                        "AND (cast(:countryCode as String) IS NULL OR p.country.code = :countryCode)")
+        int findRankByTimeframe(
+                        @Param("userScore") long userScore,
+                        @Param("start") OffsetDateTime start,
+                        @Param("end") OffsetDateTime end,
+                        @Param("countryCode") String countryCode);
+
 }

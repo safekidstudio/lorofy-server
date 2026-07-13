@@ -2,6 +2,7 @@ package com.lorofy.server.features.auth.service;
 
 import java.time.Duration;
 import java.util.Date;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.data.redis.core.RedisTemplate;
@@ -9,6 +10,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +20,7 @@ import com.lorofy.server.core.infrastructure.security.JwtTokenProvider;
 import com.lorofy.server.core.infrastructure.security.UserPrincipal;
 import com.lorofy.server.features.auth.dto.AuthResponse;
 import com.lorofy.server.features.auth.dto.LoginRequest;
+import com.lorofy.server.features.auth.dto.RefreshTokenRequest;
 import com.lorofy.server.features.auth.dto.RegisterRequest;
 import com.lorofy.server.features.auth.entity.User;
 import com.lorofy.server.features.auth.enums.Role;
@@ -47,10 +50,6 @@ public class AuthService {
             throw new IllegalArgumentException("Email is already registered: " + request.getEmail());
         }
 
-        if (profileRepository.existsByUsername(request.getUsername())) {
-            throw new IllegalArgumentException("Username is already taken: " + request.getUsername());
-        }
-
         // Create and save new user (Password will be hashed)
         User user = User.builder()
                 .email(request.getEmail())
@@ -61,10 +60,12 @@ public class AuthService {
 
         user = userRepository.save(user);
 
+        String autoUsername = generateUniqueUsername(request.getEmail());
+
         // Create and save new profile for the user
         Profile profile = Profile.builder()
                 .user(user)
-                .username(request.getUsername())
+                .username(autoUsername)
                 .country(Country.builder().code(ProfileConstants.DEFAULT_COUNTRY_CODE).build())
                 .isAnonymous(false)
                 .rankPoints(0)
@@ -115,6 +116,40 @@ public class AuthService {
                 .build();
     }
 
+    public AuthResponse refreshToken(RefreshTokenRequest request) {
+        String refreshToken = request.getRefreshToken();
+        // 1. Validate refresh token
+        if (!jwtTokenProvider.validateToken(refreshToken)) {
+            throw new IllegalArgumentException("Refresh token is not valid or expired");
+        }
+        // 2. Extract user ID from refresh token
+        UUID userId = jwtTokenProvider.getUserIdFromJWT(refreshToken);
+        // 3. Query user from database
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        if (!user.isEnabled()) {
+            throw new IllegalStateException("User is disabled");
+        }
+        // 4. Create new user principal to generate new token
+        SimpleGrantedAuthority authority = new SimpleGrantedAuthority(
+                user.getRole().name());
+        UserPrincipal userPrincipal = new UserPrincipal(user.getId(), user.getEmail(), "",
+                java.util.List.of(authority));
+        // 5. Generate new access token and refresh token
+        String newAccessToken = jwtTokenProvider.generateAccessToken(userPrincipal);
+        String newRefreshToken = jwtTokenProvider.generateRefreshToken(userPrincipal);
+        // 6. Get profile information
+        Profile profile = profileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
+        return AuthResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(newRefreshToken)
+                .userId(user.getId())
+                .email(user.getEmail())
+                .username(profile.getUsername())
+                .build();
+    }
+
     public void logout(String jwt) {
         try {
             Date expiryDate = jwtTokenProvider.getExpirationDateFromJWT(jwt);
@@ -130,4 +165,24 @@ public class AuthService {
             throw new IllegalArgumentException("Token invalid or expired");
         }
     }
+
+    private String generateUniqueUsername(String email) {
+        String baseUsername = email.split("@")[0].replaceAll("[^a-zA-Z0-9_]", "");
+        if (baseUsername.length() < 3) {
+            baseUsername = "user_" + baseUsername;
+        }
+
+        String username = baseUsername;
+        int count = 1;
+        while (profileRepository.existsByUsername(username)) {
+            username = baseUsername + "_" + (1000 + (int) (Math.random() * 9000));
+            count++;
+            if (count > 10) {
+                username = baseUsername + "_" + UUID.randomUUID().toString().substring(0, 8);
+                break;
+            }
+        }
+        return username;
+    }
+
 }
