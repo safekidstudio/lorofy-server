@@ -49,3 +49,8 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+tasks.named('bootRun') {
+	systemProperty 'java.net.preferIPv4Stack', 'true'
+}
+
