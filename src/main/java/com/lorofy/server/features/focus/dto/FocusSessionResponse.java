@@ -23,6 +23,8 @@ public class FocusSessionResponse {
     private OffsetDateTime startedAt;
     private OffsetDateTime endedAt;
     private UUID friendSessionId;
+    private String devicePlatform;
+    private double rewardMultiplier;
 
     // Gamification rewards
     private int earnedPoints;

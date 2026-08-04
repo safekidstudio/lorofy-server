@@ -21,4 +21,6 @@ public class StartSessionRequest {
     private int plannedMinutes;
 
     private UUID friendSessionId;
+
+    private String devicePlatform;
 }

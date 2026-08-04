@@ -53,6 +53,8 @@ public class FocusSessionService {
                     .orElseThrow(() -> new IllegalArgumentException("Category not found"));
         }
 
+        double multiplier = getMultiplierFromSettings(request.getBlockMode());
+
         FocusSession session = FocusSession.builder()
                 .profile(profile)
                 .category(category)
@@ -61,6 +63,8 @@ public class FocusSessionService {
                 .status(SessionStatus.RUNNING)
                 .startedAt(OffsetDateTime.now())
                 .friendSessionId(request.getFriendSessionId())
+                .devicePlatform(request.getDevicePlatform() != null ? request.getDevicePlatform() : "IOS")
+                .rewardMultiplier(multiplier)
                 .build();
 
         session = focusSessionRepository.save(session);
@@ -99,7 +103,7 @@ public class FocusSessionService {
         int basePointsPerMin = settingService.getIntSetting(SettingKeys.BASE_POINTS_PER_MIN, 1);
         int baseCoinsPerMin = settingService.getIntSetting(SettingKeys.BASE_COINS_PER_MIN, 1);
 
-        double multiplier = getMultiplierFromSettings(session.getBlockMode());
+        double multiplier = session.getRewardMultiplier();
 
         int earnedPoints = (int) Math.round(request.getActualMinutes() * basePointsPerMin * multiplier);
         int earnedCoins = (int) Math.round(request.getActualMinutes() * baseCoinsPerMin * multiplier);
@@ -247,7 +251,7 @@ public class FocusSessionService {
 
     private void updateSreak(Profile profile) {
         // Get current timezone user
-        ZoneId zoneId = ZoneId.of(profile.getTimezone() != null ? profile.getTimezone() : "Asis/Ho_Chi_Minh");
+        ZoneId zoneId = ZoneId.of(profile.getTimezone() != null ? profile.getTimezone() : "Asia/Ho_Chi_Minh");
         // Get current date in user timezone
         LocalDate today = LocalDate.now(zoneId);
         // Get last completed session
@@ -279,7 +283,6 @@ public class FocusSessionService {
 
     private double getMultiplierFromSettings(BlockMode mode) {
         String key = switch (mode) {
-            case LIGHT -> SettingKeys.MULTIPLIER_LIGHT;
             case MEDIUM -> SettingKeys.MULTIPLIER_MEDIUM;
             case STRICT -> SettingKeys.MULTIPLIER_STRICT;
         };
@@ -301,6 +304,8 @@ public class FocusSessionService {
                 .startedAt(session.getStartedAt())
                 .endedAt(session.getEndedAt())
                 .friendSessionId(session.getFriendSessionId())
+                .devicePlatform(session.getDevicePlatform())
+                .rewardMultiplier(session.getRewardMultiplier())
                 .earnedPoints(session.getEarnedPoints())
                 .earnedCoins(session.getEarnedCoins())
                 .build();

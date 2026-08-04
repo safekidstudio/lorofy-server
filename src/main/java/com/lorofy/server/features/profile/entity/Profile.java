@@ -2,6 +2,7 @@ package com.lorofy.server.features.profile.entity;
 
 import com.lorofy.server.features.auth.entity.User;
 import com.lorofy.server.features.media.entity.MediaAsset;
+import com.lorofy.server.features.focus.enums.BlockMode;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -36,6 +37,11 @@ public class Profile {
 
     @Column(name = "is_onboarded", nullable = false)
     private boolean onboarded = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "default_block_mode", nullable = false)
+    @Builder.Default
+    private BlockMode defaultBlockMode = BlockMode.MEDIUM;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "avatar_asset_id")

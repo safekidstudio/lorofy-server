@@ -99,6 +99,7 @@ public class ProfileService {
                 .timezone(profile.getTimezone())
                 .isOnboarded(profile.isOnboarded())
                 .avatarUrl(avatarUrl)
+                .defaultBlockMode(profile.getDefaultBlockMode() != null ? profile.getDefaultBlockMode().name() : "MEDIUM")
                 .build();
     }
 }

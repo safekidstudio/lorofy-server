@@ -85,6 +85,14 @@ public class FocusSession {
     @Column(name = "earned_coins")
     private int earnedCoins = 0;
 
+    @Column(name = "device_platform", length = 10)
+    @Builder.Default
+    private String devicePlatform = "IOS";
+
+    @Column(name = "reward_multiplier", nullable = false)
+    @Builder.Default
+    private double rewardMultiplier = 1.00;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 

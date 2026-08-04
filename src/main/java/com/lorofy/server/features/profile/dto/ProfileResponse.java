@@ -15,4 +15,5 @@ public class ProfileResponse {
     private String timezone;
     private boolean isOnboarded;
     private String avatarUrl;
+    private String defaultBlockMode;
 }
