@@ -51,7 +51,7 @@ CREATE TABLE focus_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
     category VARCHAR(50) NOT NULL,             -- STUDY, WORK, READ, HEALTH, OTHERS
-    block_mode VARCHAR(20) NOT NULL,           -- LIGHT, MEDIUM, STRICT
+    block_mode VARCHAR(20) NOT NULL,           -- MEDIUM, STRICT
     planned_minutes INT NOT NULL,
     actual_minutes INT DEFAULT 0,
     status VARCHAR(20) NOT NULL,               -- RUNNING, COMPLETED, FAILED, PAUSED
@@ -88,7 +88,7 @@ CREATE TABLE blocked_apps (
     profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
     app_identifier VARCHAR(255) NOT NULL,      -- Tên package ứng dụng cần chặn
     app_name VARCHAR(100) NOT NULL,
-    block_mode VARCHAR(20) NOT NULL,           -- Chế độ áp dụng (LIGHT, MEDIUM, STRICT)
+    block_mode VARCHAR(20) NOT NULL,           -- Chế độ áp dụng (MEDIUM, STRICT)
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -205,7 +205,7 @@ CREATE TABLE user_quests (
 ### **Phase 2 — Core Focus Engine & WebSocket (Tuần 2)**
 *   **Công việc:**
     - API bắt đầu, tạm dừng, tiếp tục và kết thúc phiên tập trung (`/start`, `/pause`, `/resume`, `/end`).
-    - Logic tính toán phần thưởng điểm xếp hạng (`rank_points`) và xu vàng (`gold_coins`) dựa trên thời lượng và độ khó của chế độ chặn (LIGHT = x1.0, MEDIUM = x1.2, STRICT = x1.5).
+    - Logic tính toán phần thưởng điểm xếp hạng (`rank_points`) và xu vàng (`gold_coins`) dựa trên thời lượng và độ khó của chế độ chặn (MEDIUM = x1.0, STRICT = x1.5).
     - Tích hợp **Spring WebSocket** với giao thức **STOMP** để xử lý đồng bộ thời gian thực cho tính năng "Tập trung cùng bạn bè".
 
 ### **Phase 3 — Xử phạt & Lịch sử vi phạm (Tuần 1.5)**
