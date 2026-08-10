@@ -1,5 +1,6 @@
 package com.lorofy.server.features.profile.service;
 
+import com.lorofy.server.features.profile.dto.CountryResponse;
 import com.lorofy.server.features.profile.dto.OnboardProfileRequest;
 import com.lorofy.server.features.profile.dto.ProfileResponse;
 import com.lorofy.server.features.profile.dto.UpdateProfileRequest;
@@ -13,6 +14,7 @@ import com.lorofy.server.features.media.repository.MediaAssetRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -85,6 +87,23 @@ public class ProfileService {
         Profile profile = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Hồ sơ người dùng không tồn tại"));
         return mapToResponse(profile);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CountryResponse> getCountries() {
+        return countryRepository.findAll().stream()
+                .map(country -> {
+                    MediaAsset flagAsset = country.getFlagAssetId() != null
+                            ? mediaAssetRepository.findById(country.getFlagAssetId()).orElse(null)
+                            : null;
+                    return CountryResponse.builder()
+                            .code(country.getCode())
+                            .name(country.getName())
+                            .flagAssetId(country.getFlagAssetId())
+                            .flagUrl(mediaAssetResolver.resolveUrl(flagAsset))
+                            .build();
+                })
+                .toList();
     }
 
     private ProfileResponse mapToResponse(Profile profile) {

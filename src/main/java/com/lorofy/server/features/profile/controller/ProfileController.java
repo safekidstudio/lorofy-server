@@ -7,6 +7,7 @@ import com.lorofy.server.features.focus.dto.FocusSessionResponse;
 import com.lorofy.server.features.focus.dto.FocusStatsResponse;
 import com.lorofy.server.features.focus.enums.SessionStatus;
 import com.lorofy.server.features.focus.service.FocusSessionService;
+import com.lorofy.server.features.profile.dto.CountryResponse;
 import com.lorofy.server.features.profile.dto.OnboardProfileRequest;
 import com.lorofy.server.features.profile.dto.ProfileResponse;
 import com.lorofy.server.features.profile.dto.UpdateProfileRequest;
@@ -76,6 +77,12 @@ public class ProfileController {
             @RequestParam int month) {
         List<String> response = focusSessionService.getCalendarDates(currentUser.getId(), year, month);
         return ResponseEntity.ok(ApiResponse.success(response, "Get focus calendar success"));
+    }
+
+    @GetMapping("/countries")
+    public ResponseEntity<ApiResponse<List<CountryResponse>>> getCountries() {
+        List<CountryResponse> response = profileService.getCountries();
+        return ResponseEntity.ok(ApiResponse.success(response, "Get countries success"));
     }
 
 }
