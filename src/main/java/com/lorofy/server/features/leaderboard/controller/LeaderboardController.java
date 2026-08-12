@@ -9,15 +9,15 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.lorofy.server.core.infrastructure.security.PublicEndpoint;
 import com.lorofy.server.core.infrastructure.security.UserPrincipal;
 import com.lorofy.server.core.response.ApiResponse;
-import com.lorofy.server.core.response.PageResponse;
-import com.lorofy.server.features.leaderboard.dto.LeaderboardItemResponse;
 import com.lorofy.server.features.leaderboard.dto.LeaderboardResponse;
 import com.lorofy.server.features.leaderboard.enums.LeaderboardTimeframe;
 import com.lorofy.server.features.leaderboard.service.LeaderboardService;
+import com.lorofy.server.features.leaderboard.service.LeaderboardSseService;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +28,13 @@ import lombok.RequiredArgsConstructor;
 @Tag(name = "Leaderboard", description = "Global and Regional Ranking APIs")
 public class LeaderboardController {
     private final LeaderboardService leaderboardService;
+    private final LeaderboardSseService leaderboardSseService;
+
+    @GetMapping("/stream")
+    @PublicEndpoint
+    public SseEmitter streamLeaderboard() {
+        return leaderboardSseService.registerClient();
+    }
 
     @GetMapping
     @PublicEndpoint
