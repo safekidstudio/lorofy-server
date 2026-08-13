@@ -19,11 +19,14 @@ public class EmailService {
     @Value("${app.mail.from-address}")
     private String fromAddress;
 
+    @Value("${app.mail.from-name}")
+    private String fromName;
+
     public void sendOtpEmail(String toEmail, String otpCode) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setFrom(fromAddress);
+            helper.setFrom(fromAddress, fromName);
             helper.setTo(toEmail);
             helper.setSubject("Verify Your Email Address");
 
@@ -47,7 +50,7 @@ public class EmailService {
             helper.setText(htmlContent, true);
             mailSender.send(message);
             log.info("Email OTP sent successfully to {}", toEmail);
-        } catch (MessagingException e) {
+        } catch (Exception e) {
             log.error("Failed to send OTP email to {}", toEmail, e);
             throw new RuntimeException("Could not send verification email. Please try again.");
         }
