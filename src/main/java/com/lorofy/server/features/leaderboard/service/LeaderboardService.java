@@ -154,10 +154,14 @@ public class LeaderboardService {
                     // Fallback to database queries for rank & score
                     if (timeframe == LeaderboardTimeframe.ALL) {
                         myPoints = myProfile.getRankPoints();
-                        if (cleanCountry != null) {
-                            myRank = profileRepository.findRankAllTimeByCountry(myPoints, cleanCountry);
+                        if (myPoints > 0) {
+                            if (cleanCountry != null) {
+                                myRank = profileRepository.findRankAllTimeByCountry(myPoints, cleanCountry);
+                            } else {
+                                myRank = profileRepository.findRankAllTime(myPoints);
+                            }
                         } else {
-                            myRank = profileRepository.findRankAllTime(myPoints);
+                            myRank = -1;
                         }
                     } else {
                         LocalDate utdToday = LocalDate.now(ZoneOffset.UTC);
@@ -184,8 +188,16 @@ public class LeaderboardService {
 
                         long score = focusSessionRepository.sumEarnedPointsByTimeframe(myProfile.getId(), startUtc, endUtc);
                         myPoints = (int) score;
-                        myRank = focusSessionRepository.findRankByTimeframe(score, startUtc, endUtc, cleanCountry);
+                        if (myPoints > 0) {
+                            myRank = focusSessionRepository.findRankByTimeframe(score, startUtc, endUtc, cleanCountry);
+                        } else {
+                            myRank = -1;
+                        }
                     }
+                }
+
+                if (myPoints <= 0) {
+                    myRank = -1;
                 }
 
                 String avatarUrl = mediaAssetResolver.resolveUrl(myProfile.getAvatarAsset());
@@ -212,9 +224,9 @@ public class LeaderboardService {
         if (timeframe.equals(LeaderboardTimeframe.ALL)) {
             Page<Profile> profilePage;
             if (cleanCountry != null) {
-                profilePage = profileRepository.findAllByCountryCodeOrderByRankPointsDesc(cleanCountry, pageable);
+                profilePage = profileRepository.findAllByCountryCodeAndRankPointsGreaterThanOrderByRankPointsDesc(cleanCountry, 0, pageable);
             } else {
-                profilePage = profileRepository.findAllByOrderByRankPointsDesc(pageable);
+                profilePage = profileRepository.findAllByRankPointsGreaterThanOrderByRankPointsDesc(0, pageable);
             }
 
             int startRank = (int) pageable.getOffset() + 1;
@@ -296,9 +308,9 @@ public class LeaderboardService {
         if (timeframe == LeaderboardTimeframe.ALL) {
             Page<Profile> profilePage;
             if (countryCode != null) {
-                profilePage = profileRepository.findAllByCountryCodeOrderByRankPointsDesc(countryCode, top1000);
+                profilePage = profileRepository.findAllByCountryCodeAndRankPointsGreaterThanOrderByRankPointsDesc(countryCode, 0, top1000);
             } else {
-                profilePage = profileRepository.findAllByOrderByRankPointsDesc(top1000);
+                profilePage = profileRepository.findAllByRankPointsGreaterThanOrderByRankPointsDesc(0, top1000);
             }
             list = profilePage.getContent().stream()
                     .map(p -> LeaderboardItemResponse.builder()

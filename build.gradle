@@ -28,6 +28,8 @@ dependencies {
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
     implementation 'com.cloudinary:cloudinary-http5:2.4.0'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'com.resend:resend-java:+'
+
 
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.5'

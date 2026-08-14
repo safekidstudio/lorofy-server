@@ -19,10 +19,10 @@ public interface ProfileRepository extends JpaRepository<Profile, UUID> {
     boolean existsByUsername(String username);
 
     // Get leaderboard all time without country code
-    Page<Profile> findAllByOrderByRankPointsDesc(Pageable pageable);
+    Page<Profile> findAllByRankPointsGreaterThanOrderByRankPointsDesc(int minPoints, Pageable pageable);
 
     // Get leaderboard all time with country code
-    Page<Profile> findAllByCountryCodeOrderByRankPointsDesc(String countryCode, Pageable pageable);
+    Page<Profile> findAllByCountryCodeAndRankPointsGreaterThanOrderByRankPointsDesc(String countryCode, int minPoints, Pageable pageable);
 
     // Get rank of profile all time without country code
     @Query("SELECT COUNT(p) + 1 FROM Profile p WHERE p.rankPoints > :points")
