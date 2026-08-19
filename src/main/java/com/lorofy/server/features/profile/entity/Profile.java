@@ -35,6 +35,7 @@ public class Profile {
     @Column(length = 20)
     private String timezone; // "Asia/Ho_Chi_Minh"
 
+    @Builder.Default
     @Column(name = "is_onboarded", nullable = false)
     private boolean onboarded = false;
 
@@ -54,24 +55,31 @@ public class Profile {
     @Column(name = "current_rank_id")
     private UUID currentRankId;
 
+    @Builder.Default
     @Column(name = "is_anonymous")
     private boolean isAnonymous = false;
 
+    @Builder.Default
     @Column(name = "rank_points")
     private int rankPoints = 0;
 
+    @Builder.Default
     @Column(name = "gold_coins")
     private int goldCoins = 0;
 
+    @Builder.Default
     @Column(name = "total_focus_minutes")
     private int totalFocusMinutes = 0;
 
+    @Builder.Default
     @Column(name = "current_streak")
     private int currentStreak = 0;
 
+    @Builder.Default
     @Column(name = "longest_streak")
     private int longestStreak = 0;
 
+    @Builder.Default
     @Column(name = "streak_freeze_count")
     private int streakFreezeCount = 0;
 

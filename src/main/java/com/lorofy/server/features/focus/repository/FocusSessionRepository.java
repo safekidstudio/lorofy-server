@@ -24,7 +24,6 @@ public interface FocusSessionRepository extends JpaRepository<FocusSession, UUID
                         @Param("profileId") UUID profileId,
                         @Param("status") SessionStatus status);
 
-        // Get histories session with params
         @Query("SELECT f FROM FocusSession f WHERE f.profile.id = :profileId " +
                         "AND (cast(:status as String) IS NULL OR f.status = :status) " +
                         "AND (cast(:startDate as timestamp) IS NULL OR f.endedAt >= :startDate) " +
@@ -70,10 +69,16 @@ public interface FocusSessionRepository extends JpaRepository<FocusSession, UUID
                         @Param("end") OffsetDateTime end);
 
         // Get rank of profile in specific date range
-        @Query("SELECT COUNT(p) + 1 FROM Profile p WHERE " +
-                        "(SELECT COALESCE(SUM(fs.earnedPoints), 0) FROM FocusSession fs WHERE fs.profile.id = p.id AND fs.status = 'COMPLETED' AND fs.endedAt BETWEEN :start AND :end) > :userScore "
-                        +
-                        "AND (cast(:countryCode as String) IS NULL OR p.country.code = :countryCode)")
+        @Query(value = "SELECT COUNT(*) + 1 FROM (" +
+                        "  SELECT fs.profile_id " +
+                        "  FROM focus_sessions fs " +
+                        "  INNER JOIN profiles p ON fs.profile_id = p.id " +
+                        "  WHERE fs.status = 'COMPLETED' " +
+                        "    AND fs.ended_at BETWEEN :start AND :end " +
+                        "    AND (cast(:countryCode as varchar) IS NULL OR p.country_code = :countryCode) " +
+                        "  GROUP BY fs.profile_id " +
+                        "  HAVING SUM(fs.earned_points) > :userScore" +
+                        ") AS temp", nativeQuery = true)
         int findRankByTimeframe(
                         @Param("userScore") long userScore,
                         @Param("start") OffsetDateTime start,
