@@ -119,6 +119,7 @@ public class ProfileService {
                 .isOnboarded(profile.isOnboarded())
                 .avatarUrl(avatarUrl)
                 .defaultBlockMode(profile.getDefaultBlockMode() != null ? profile.getDefaultBlockMode().name() : "MEDIUM")
+                .rankPoints(profile.getRankPoints())
                 .build();
     }
 }

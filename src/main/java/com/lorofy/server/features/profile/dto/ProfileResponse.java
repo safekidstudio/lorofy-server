@@ -16,4 +16,5 @@ public class ProfileResponse {
     private boolean isOnboarded;
     private String avatarUrl;
     private String defaultBlockMode;
+    private int rankPoints;
 }
