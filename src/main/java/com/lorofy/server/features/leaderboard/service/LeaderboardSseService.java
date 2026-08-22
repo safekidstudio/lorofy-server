@@ -1,5 +1,6 @@
 package com.lorofy.server.features.leaderboard.service;
 
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -51,5 +52,25 @@ public class LeaderboardSseService {
             }
         }
         emitters.removeAll(deadEmitters);
+    }
+
+    @Scheduled(fixedRate = 20000) // every 20 seconds
+    public void sendHeartbeat() {
+        if (emitters.isEmpty()) {
+            return;
+        }
+        log.debug("Sending heartbeat ping to {} SSE emitters", emitters.size());
+        List<SseEmitter> deadEmitters = new ArrayList<>();
+        for (SseEmitter emitter : emitters) {
+            try {
+                emitter.send(SseEmitter.event().comment("ping"));
+            } catch (IOException e) {
+                deadEmitters.add(emitter);
+            }
+        }
+        if (!deadEmitters.isEmpty()) {
+            emitters.removeAll(deadEmitters);
+            log.debug("Removed {} dead SSE emitters", deadEmitters.size());
+        }
     }
 }

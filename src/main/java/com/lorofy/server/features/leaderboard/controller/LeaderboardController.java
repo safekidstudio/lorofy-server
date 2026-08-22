@@ -32,8 +32,13 @@ public class LeaderboardController {
 
     @GetMapping("/stream")
     @PublicEndpoint
-    public SseEmitter streamLeaderboard() {
-        return leaderboardSseService.registerClient();
+    public ResponseEntity<SseEmitter> streamLeaderboard() {
+        SseEmitter emitter = leaderboardSseService.registerClient();
+        return ResponseEntity.ok()
+                .header("X-Accel-Buffering", "no")
+                .header("Cache-Control", "no-cache, no-transform")
+                .header("Connection", "keep-alive")
+                .body(emitter);
     }
 
     @GetMapping
