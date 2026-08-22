@@ -137,7 +137,7 @@ public class SecurityConfig {
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 
         // Cho phép các Header gửi lên
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Cache-Control"));
+        configuration.setAllowedHeaders(List.of("*"));
 
         // Cho phép đính kèm Cookie/Auth Credentials nếu cần
         configuration.setAllowCredentials(true);
