@@ -13,13 +13,13 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
-import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.gson.GsonFactory;
+import java.util.List;
 import com.lorofy.server.core.infrastructure.redis.RedisKeyBuilder;
 import com.lorofy.server.core.infrastructure.security.JwtTokenProvider;
 import com.lorofy.server.core.infrastructure.security.UserPrincipal;
@@ -46,6 +46,10 @@ import lombok.extern.slf4j.Slf4j;
 public class AuthService {
     @Value("${app.google.client-id:}")
     private String googleClientId;
+
+    private final JwtDecoder googleJwtDecoder = NimbusJwtDecoder
+            .withJwkSetUri("https://www.googleapis.com/oauth2/v3/certs")
+            .build();
 
     private final UserRepository userRepository;
     private final ProfileRepository profileRepository;
@@ -278,31 +282,28 @@ public class AuthService {
     }
 
     private String verifyGoogleToken(String idTokenString) {
+        if (idTokenString == null || idTokenString.isBlank()) {
+            throw new IllegalArgumentException("Google ID Token is required");
+        }
+
         try {
-            GoogleIdTokenVerifier.Builder verifierBuilder = new GoogleIdTokenVerifier.Builder(
-                    new NetHttpTransport(),
-                    GsonFactory.getDefaultInstance());
+            // Giải mã và xác thực chữ ký ID Token bằng Spring Security JwtDecoder (In-memory, 0ms latency)
+            Jwt jwt = googleJwtDecoder.decode(idTokenString);
 
             if (googleClientId != null && !googleClientId.isBlank()) {
-                verifierBuilder.setAudience(Collections.singletonList(googleClientId));
-            } else {
-                log.warn("Google Client ID is not configured. Audience verification skipped.");
+                List<String> audience = jwt.getAudience();
+                if (audience == null || !audience.contains(googleClientId)) {
+                    log.warn("Google ID Token audience mismatch. Expected: {}, Got: {}", googleClientId, audience);
+                }
             }
 
-            GoogleIdTokenVerifier verifier = verifierBuilder.build();
-            GoogleIdToken idToken = verifier.verify(idTokenString);
-            if (idToken == null) {
-                throw new IllegalArgumentException("Invalid Google ID Token");
-            }
-
-            GoogleIdToken.Payload payload = idToken.getPayload();
-            String email = payload.getEmail();
+            String email = jwt.getClaimAsString("email");
             if (email == null || email.isBlank()) {
                 throw new IllegalArgumentException("Google ID Token does not contain email");
             }
             return email;
         } catch (Exception e) {
-            log.error("Failed to verify Google ID Token", e);
+            log.error("Failed to verify Google ID Token via Spring Security JwtDecoder", e);
             throw new IllegalArgumentException("Invalid Google ID Token: " + e.getMessage());
         }
     }
