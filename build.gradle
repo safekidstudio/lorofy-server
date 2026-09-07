@@ -29,6 +29,7 @@ dependencies {
     implementation 'com.cloudinary:cloudinary-http5:2.4.0'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'com.resend:resend-java:+'
+	implementation 'com.google.api-client:google-api-client:2.7.0'
 
 
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'

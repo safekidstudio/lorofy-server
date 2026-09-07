@@ -15,6 +15,7 @@ import com.lorofy.server.core.infrastructure.security.UserPrincipal;
 import com.lorofy.server.core.response.ApiResponse;
 import com.lorofy.server.features.auth.dto.AuthResponse;
 import com.lorofy.server.features.auth.dto.LoginRequest;
+import com.lorofy.server.features.auth.dto.OAuthLoginRequest;
 import com.lorofy.server.features.auth.dto.RefreshTokenRequest;
 import com.lorofy.server.features.auth.dto.RegisterRequest;
 import com.lorofy.server.features.auth.dto.SendOtpRequest;
@@ -64,6 +65,13 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
         return ResponseEntity.ok(ApiResponse.success(response, "Logged in successfully"));
+    }
+
+    @PostMapping("/oauth")
+    @PublicEndpoint
+    public ResponseEntity<ApiResponse<AuthResponse>> loginWithOAuth(@Valid @RequestBody OAuthLoginRequest request) {
+        AuthResponse response = authService.loginWithOAuth(request);
+        return ResponseEntity.ok(ApiResponse.success(response, "OAuth login successful"));
     }
 
     @PostMapping("/refresh")

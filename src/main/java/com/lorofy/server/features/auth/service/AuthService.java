@@ -5,6 +5,7 @@ import java.util.Date;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -15,11 +16,16 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
 import com.lorofy.server.core.infrastructure.redis.RedisKeyBuilder;
 import com.lorofy.server.core.infrastructure.security.JwtTokenProvider;
 import com.lorofy.server.core.infrastructure.security.UserPrincipal;
 import com.lorofy.server.features.auth.dto.AuthResponse;
 import com.lorofy.server.features.auth.dto.LoginRequest;
+import com.lorofy.server.features.auth.dto.OAuthLoginRequest;
 import com.lorofy.server.features.auth.dto.RefreshTokenRequest;
 import com.lorofy.server.features.auth.dto.RegisterRequest;
 import com.lorofy.server.features.auth.entity.User;
@@ -29,6 +35,7 @@ import com.lorofy.server.features.profile.constants.ProfileConstants;
 import com.lorofy.server.features.profile.entity.Country;
 import com.lorofy.server.features.profile.entity.Profile;
 import com.lorofy.server.features.profile.repository.ProfileRepository;
+import java.util.Collections;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +44,9 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class AuthService {
+    @Value("${app.google.client-id:}")
+    private String googleClientId;
+
     private final UserRepository userRepository;
     private final ProfileRepository profileRepository;
     private final PasswordEncoder passwordEncoder;
@@ -200,4 +210,100 @@ public class AuthService {
         otpService.generateOtpAndSendEmail(email);
     }
 
+    @Transactional
+    public AuthResponse loginWithOAuth(OAuthLoginRequest request) {
+        String email;
+
+        if ("GOOGLE".equalsIgnoreCase(request.getProvider())) {
+            email = verifyGoogleToken(request.getToken());
+        } else {
+            throw new IllegalArgumentException("Unsupported OAuth provider: " + request.getProvider());
+        }
+
+        // Search or create user
+        User user = userRepository.findByEmail(email).orElseGet(() -> {
+            User newUser = User.builder()
+                    .email(email)
+                    .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
+                    .role(Role.USER)
+                    .isEnabled(true)
+                    .build();
+
+            User savedUser = userRepository.save(newUser);
+
+            String autoUsername = generateUniqueUsername(email);
+            Profile profile = Profile.builder()
+                    .user(savedUser)
+                    .username(autoUsername)
+                    .displayName(request.getFullName())
+                    .timezone("Asia/Ho_Chi_Minh")
+                    .country(Country.builder().code(ProfileConstants.DEFAULT_COUNTRY_CODE).build())
+                    .isAnonymous(false)
+                    .rankPoints(0)
+                    .goldCoins(0)
+                    .totalFocusMinutes(0)
+                    .currentStreak(0)
+                    .longestStreak(0)
+                    .build();
+
+            profileRepository.save(profile);
+            return savedUser;
+        });
+
+        if (!user.isEnabled()) {
+            throw new IllegalStateException("User is disabled");
+        }
+
+        // Generate Principal & Tokens
+        SimpleGrantedAuthority authority = new SimpleGrantedAuthority(user.getRole().name());
+        UserPrincipal userPrincipal = new UserPrincipal(
+                user.getId(),
+                user.getEmail(),
+                "",
+                Collections.singletonList(authority));
+
+        String accessToken = jwtTokenProvider.generateAccessToken(userPrincipal);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(userPrincipal);
+
+        Profile profile = profileRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
+
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .userId(user.getId())
+                .email(user.getEmail())
+                .username(profile.getUsername())
+                .build();
+    }
+
+    private String verifyGoogleToken(String idTokenString) {
+        try {
+            GoogleIdTokenVerifier.Builder verifierBuilder = new GoogleIdTokenVerifier.Builder(
+                    new NetHttpTransport(),
+                    GsonFactory.getDefaultInstance());
+
+            if (googleClientId != null && !googleClientId.isBlank()) {
+                verifierBuilder.setAudience(Collections.singletonList(googleClientId));
+            } else {
+                log.warn("Google Client ID is not configured. Audience verification skipped.");
+            }
+
+            GoogleIdTokenVerifier verifier = verifierBuilder.build();
+            GoogleIdToken idToken = verifier.verify(idTokenString);
+            if (idToken == null) {
+                throw new IllegalArgumentException("Invalid Google ID Token");
+            }
+
+            GoogleIdToken.Payload payload = idToken.getPayload();
+            String email = payload.getEmail();
+            if (email == null || email.isBlank()) {
+                throw new IllegalArgumentException("Google ID Token does not contain email");
+            }
+            return email;
+        } catch (Exception e) {
+            log.error("Failed to verify Google ID Token", e);
+            throw new IllegalArgumentException("Invalid Google ID Token: " + e.getMessage());
+        }
+    }
 }
