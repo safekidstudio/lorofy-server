@@ -20,6 +20,9 @@ import com.lorofy.server.features.focus.constant.SettingKeys;
 import com.lorofy.server.features.focus.dto.EndSessionRequest;
 import com.lorofy.server.features.focus.dto.FocusSessionResponse;
 import com.lorofy.server.features.focus.dto.FocusStatsResponse;
+import com.lorofy.server.features.profile.dto.PointHistoryResponse;
+import com.lorofy.server.features.profile.dto.ProfileResponse;
+import com.lorofy.server.features.profile.dto.StreakRepairRequest;
 import com.lorofy.server.features.focus.dto.StartSessionRequest;
 import com.lorofy.server.features.focus.entity.Category;
 import com.lorofy.server.features.focus.entity.FocusSession;
@@ -170,6 +173,40 @@ public class FocusSessionService {
         session.setFailureReason(
                 request.getFailureReason() != null ? request.getFailureReason() : "User exited session");
 
+        Profile profile = session.getProfile();
+        int penaltyPoints = 0;
+
+        long elapsedSeconds = session.getStartedAt() != null
+                ? ChronoUnit.SECONDS.between(session.getStartedAt(), session.getEndedAt())
+                : request.getActualMinutes() * 60L;
+
+        // Grace period check: apply penalty if elapsed time >= 60s or actualMinutes >= 1
+        if (elapsedSeconds >= 60 || request.getActualMinutes() >= 1) {
+            String settingKey = session.getBlockMode() == BlockMode.STRICT
+                    ? SettingKeys.PENALTY_POINTS_STRICT
+                    : SettingKeys.PENALTY_POINTS_MEDIUM;
+            int defaultPenalty = session.getBlockMode() == BlockMode.STRICT ? 40 : 20;
+            penaltyPoints = settingService.getIntSetting(settingKey, defaultPenalty);
+        }
+
+        if (penaltyPoints > 0) {
+            session.setEarnedPoints(-penaltyPoints);
+            int updatedPoints = Math.max(0, profile.getRankPoints() - penaltyPoints);
+            profile.setRankPoints(updatedPoints);
+            profileRepository.save(profile);
+
+            try {
+                LocalDate today = LocalDate.now(ZoneOffset.UTC);
+                String countryCode = profile.getCountry() != null ? profile.getCountry().getCode() : null;
+                List<String> activeKeys = redisLeaderboardHelper.getActiveKeys(today, countryCode);
+                for (String key : activeKeys) {
+                    redisLeaderboardHelper.incrementScoreIfKeyExists(key, profile.getId(), -penaltyPoints);
+                }
+            } catch (Exception e) {
+                log.error("Failed to deduct score in Redis leaderboard", e);
+            }
+        }
+
         session = focusSessionRepository.save(session);
 
         return mapToResponse(session);
@@ -195,10 +232,13 @@ public class FocusSessionService {
     }
 
     // FOCUS SESSION STATS
-    @Transactional(readOnly = true)
+    @Transactional
     public FocusStatsResponse getStats(UUID userId) {
         Profile profile = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
+
+        evaluateAndRepairStreak(profile);
+
         List<FocusSession> allSessions = focusSessionRepository.findAllByProfileId(profile.getId());
         // Lọc danh sách hoàn thành và thất bại
         List<FocusSession> completed = allSessions.stream()
@@ -222,8 +262,7 @@ public class FocusSessionService {
                     return new FocusStatsResponse.CategoryStat(name, color, minutes, list.size());
                 })
                 .collect(Collectors.toList());
-        // 2.2 Tính toán biểu đồ tiến trình 7 ngày gần nhất (Theo múi giờ local của
-        // User)
+        // 2.2 Tính toán biểu đồ tiến trình 7 ngày gần nhất (Theo múi giờ local của User)
         ZoneId zoneId = ZoneId.of(profile.getTimezone() != null ? profile.getTimezone() : "Asia/Ho_Chi_Minh");
         LocalDate today = LocalDate.now(zoneId);
         List<LocalDate> last7Days = IntStream.range(0, 7)
@@ -233,7 +272,7 @@ public class FocusSessionService {
         List<FocusStatsResponse.DailyProgress> weeklyProgress = last7Days.stream()
                 .map(date -> {
                     int mins = completed.stream()
-                            .filter(s -> s.getEndedAt().atZoneSameInstant(zoneId).toLocalDate().equals(date))
+                            .filter(s -> s.getEndedAt() != null && s.getEndedAt().atZoneSameInstant(zoneId).toLocalDate().equals(date))
                             .mapToInt(FocusSession::getActualMinutes)
                             .sum();
                     return new FocusStatsResponse.DailyProgress(date.toString(), mins);
@@ -250,22 +289,50 @@ public class FocusSessionService {
                 .build();
     }
 
+    // POINT HISTORY
+    @Transactional(readOnly = true)
+    public PageResponse<PointHistoryResponse> getPointHistory(UUID userId, Pageable pageable) {
+        Profile profile = profileRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
+
+        Page<FocusSession> page = focusSessionRepository.findPointHistory(profile.getId(), pageable);
+
+        Page<PointHistoryResponse> responsePage = page.map(session -> {
+            boolean isPositive = session.getEarnedPoints() > 0;
+            String type = isPositive ? "REWARD" : "PENALTY";
+            String title = isPositive ? "Hoàn thành tập trung" : "Bỏ cuộc giữa chừng";
+            String categoryName = session.getCategory() != null ? session.getCategory().getName() : "Khác";
+            String description = !isPositive
+                    ? (session.getFailureReason() != null ? session.getFailureReason() : "Bấm bỏ cuộc trong phiên tập trung")
+                    : ("Tập trung " + session.getActualMinutes() + " phút (" + (session.getBlockMode() != null ? session.getBlockMode().name() : "") + ")");
+
+            return PointHistoryResponse.builder()
+                    .id(session.getId())
+                    .type(type)
+                    .points(session.getEarnedPoints())
+                    .title(title)
+                    .description(description)
+                    .categoryName(categoryName)
+                    .blockMode(session.getBlockMode() != null ? session.getBlockMode().name() : null)
+                    .timestamp(session.getEndedAt() != null ? session.getEndedAt() : session.getStartedAt())
+                    .build();
+        });
+
+        return PageResponse.from(responsePage);
+    }
+
     // CALENDAR
     @Transactional(readOnly = true)
     public List<String> getCalendarDates(UUID userId, int year, int month) {
         Profile profile = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
         ZoneId zoneId = ZoneId.of(profile.getTimezone() != null ? profile.getTimezone() : "Asia/Ho_Chi_Minh");
-        // Tính khoảng thời gian bắt đầu và kết thúc tháng ở giờ địa phương, rồi đổi
-        // sang UTC cho Database Query
         LocalDate startLocalDate = LocalDate.of(year, month, 1);
         LocalDate endLocalDate = startLocalDate.plusMonths(1).minusDays(1);
         OffsetDateTime startUtc = startLocalDate.atStartOfDay(zoneId).toOffsetDateTime();
         OffsetDateTime endUtc = endLocalDate.plusDays(1).atStartOfDay(zoneId).minusNanos(1).toOffsetDateTime();
         List<FocusSession> sessions = focusSessionRepository.findAllByProfileIdAndStatusAndEndedAtBetween(
                 profile.getId(), SessionStatus.COMPLETED, startUtc, endUtc);
-        // Chuyển đổi ngược từ UTC sang local ngày của user và lấy danh sách các ngày
-        // duy nhất
         return sessions.stream()
                 .map(s -> s.getEndedAt().atZoneSameInstant(zoneId).toLocalDate().toString())
                 .distinct()
@@ -282,36 +349,143 @@ public class FocusSessionService {
         return session;
     }
 
-    private void updateSreak(Profile profile) {
-        // Get current timezone user
+    @Transactional
+    public void evaluateAndRepairStreak(Profile profile) {
         ZoneId zoneId = ZoneId.of(profile.getTimezone() != null ? profile.getTimezone() : "Asia/Ho_Chi_Minh");
-        // Get current date in user timezone
         LocalDate today = LocalDate.now(zoneId);
-        // Get last completed session
+
         Optional<FocusSession> lastSessionOpt = focusSessionRepository.findLastCompletedSession(profile.getId(),
                 SessionStatus.COMPLETED);
 
-        // If no last session, set current streak and longest streak to 1
+        if (lastSessionOpt.isEmpty()) {
+            if (profile.getCurrentStreak() != 0) {
+                profile.setCurrentStreak(0);
+                profile.setPreviousStreak(0);
+                profileRepository.save(profile);
+            }
+            return;
+        }
+
+        LocalDate lastSessionDate = lastSessionOpt.get().getEndedAt().atZoneSameInstant(zoneId).toLocalDate();
+        long daysBetween = ChronoUnit.DAYS.between(lastSessionDate, today);
+
+        if (daysBetween <= 1) {
+            // Intact streak
+            return;
+        }
+
+        // Missed yesterday (daysBetween == 2)
+        if (daysBetween == 2) {
+            if (profile.getCurrentStreak() > 0) {
+                profile.setPreviousStreak(profile.getCurrentStreak());
+                profile.setStreakBrokenAt(OffsetDateTime.now());
+                profile.setCurrentStreak(0);
+                profileRepository.save(profile);
+                log.info("Streak broken for profile ID: {}. Can be repaired (previous streak: {})",
+                        profile.getId(), profile.getPreviousStreak());
+            }
+        } else {
+            // Missed > 1 day -> repair window expired
+            if (profile.getCurrentStreak() != 0 || profile.getPreviousStreak() != 0) {
+                profile.setCurrentStreak(0);
+                profile.setPreviousStreak(0);
+                profile.setStreakBrokenAt(null);
+                profileRepository.save(profile);
+                log.info("Streak repair window expired for profile ID: {}", profile.getId());
+            }
+        }
+    }
+
+    @Transactional
+    public ProfileResponse repairStreak(UUID userId, StreakRepairRequest request) {
+        Profile profile = profileRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
+
+        evaluateAndRepairStreak(profile);
+
+        if (profile.getPreviousStreak() <= 0) {
+            throw new IllegalStateException("Không có streak nào có thể khôi phục");
+        }
+
+        int costCoins = 100;
+
+        if (request.isUseFreezeItem()) {
+            if (profile.getStreakFreezeCount() < 1) {
+                throw new IllegalArgumentException("Bạn không có đủ Lá Chắn Đóng Băng trong kho đồ");
+            }
+            profile.setStreakFreezeCount(profile.getStreakFreezeCount() - 1);
+            profile.setLastStreakFreezeUsed(OffsetDateTime.now());
+        } else if (request.isUseCoins()) {
+            if (profile.getGoldCoins() < costCoins) {
+                throw new IllegalArgumentException("Bạn không có đủ Gold Coins (Cần " + costCoins + " xu)");
+            }
+            profile.setGoldCoins(profile.getGoldCoins() - costCoins);
+        } else {
+            throw new IllegalArgumentException("Vui lòng chọn phương thức khôi phục (Lá Chắn hoặc Xu)");
+        }
+
+        int restoredStreak = profile.getPreviousStreak();
+        profile.setCurrentStreak(restoredStreak);
+        profile.setLongestStreak(Math.max(profile.getLongestStreak(), restoredStreak));
+        profile.setPreviousStreak(0);
+        profile.setStreakBrokenAt(null);
+
+        profile = profileRepository.save(profile);
+
+        String avatarUrl = mediaAssetResolver.resolveUrl(profile.getAvatarAsset());
+        return ProfileResponse.builder()
+                .id(profile.getId())
+                .username(profile.getUsername())
+                .displayName(profile.getDisplayName())
+                .countryCode(profile.getCountry() != null ? profile.getCountry().getCode() : null)
+                .countryName(profile.getCountry() != null ? profile.getCountry().getName() : null)
+                .timezone(profile.getTimezone())
+                .isOnboarded(profile.isOnboarded())
+                .avatarUrl(avatarUrl)
+                .defaultBlockMode(profile.getDefaultBlockMode() != null ? profile.getDefaultBlockMode().name() : "MEDIUM")
+                .rankPoints(profile.getRankPoints())
+                .goldCoins(profile.getGoldCoins())
+                .totalFocusMinutes(profile.getTotalFocusMinutes())
+                .currentStreak(profile.getCurrentStreak())
+                .longestStreak(profile.getLongestStreak())
+                .streakFreezeCount(profile.getStreakFreezeCount())
+                .canRepairStreak(false)
+                .repairableStreak(0)
+                .repairCostCoins(100)
+                .build();
+    }
+
+    private void updateSreak(Profile profile) {
+        ZoneId zoneId = ZoneId.of(profile.getTimezone() != null ? profile.getTimezone() : "Asia/Ho_Chi_Minh");
+        LocalDate today = LocalDate.now(zoneId);
+
+        Optional<FocusSession> lastSessionOpt = focusSessionRepository.findLastCompletedSession(profile.getId(),
+                SessionStatus.COMPLETED);
+
         if (lastSessionOpt.isEmpty()) {
             profile.setCurrentStreak(1);
             profile.setLongestStreak(Math.max(profile.getLongestStreak(), 1));
             return;
         }
 
-        // Get last session date in user timezone
         LocalDate lastSessionDate = lastSessionOpt.get().getEndedAt().atZoneSameInstant(zoneId).toLocalDate();
         long daysBetween = ChronoUnit.DAYS.between(lastSessionDate, today);
 
-        // If consecutive -> Increase streak
-        if (daysBetween == 1) {
+        if (daysBetween == 0) {
+            if (profile.getCurrentStreak() == 0) {
+                profile.setCurrentStreak(1);
+                profile.setLongestStreak(Math.max(profile.getLongestStreak(), 1));
+            }
+        } else if (daysBetween == 1) {
             int newStreak = profile.getCurrentStreak() + 1;
             profile.setCurrentStreak(newStreak);
             profile.setLongestStreak(Math.max(profile.getLongestStreak(), newStreak));
         } else if (daysBetween > 1) {
-            // Miss streak -> Reset streak to 1
             profile.setCurrentStreak(1);
+            profile.setPreviousStreak(0);
+            profile.setStreakBrokenAt(null);
+            profile.setLongestStreak(Math.max(profile.getLongestStreak(), 1));
         }
-
     }
 
     private double getMultiplierFromSettings(BlockMode mode) {

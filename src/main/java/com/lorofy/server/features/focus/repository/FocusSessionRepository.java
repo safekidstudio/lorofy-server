@@ -39,6 +39,10 @@ public interface FocusSessionRepository extends JpaRepository<FocusSession, UUID
         // Get all sessions of user
         List<FocusSession> findAllByProfileId(UUID profileId);
 
+        // Get point history (sessions with earned_points != 0)
+        @Query("SELECT f FROM FocusSession f WHERE f.profile.id = :profileId AND f.earnedPoints <> 0 ORDER BY f.endedAt DESC")
+        Page<FocusSession> findPointHistory(@Param("profileId") UUID profileId, Pageable pageable);
+
         // Get all sessions of user in specific date range
         List<FocusSession> findAllByProfileIdAndStatusAndEndedAtBetween(
                         UUID profileId,

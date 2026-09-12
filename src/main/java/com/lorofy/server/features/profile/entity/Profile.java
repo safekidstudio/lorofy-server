@@ -86,6 +86,13 @@ public class Profile {
     @Column(name = "last_streak_freeze_used")
     private OffsetDateTime lastStreakFreezeUsed;
 
+    @Builder.Default
+    @Column(name = "previous_streak")
+    private int previousStreak = 0;
+
+    @Column(name = "streak_broken_at")
+    private OffsetDateTime streakBrokenAt;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 

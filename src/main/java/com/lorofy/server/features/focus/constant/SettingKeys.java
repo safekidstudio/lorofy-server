@@ -11,4 +11,7 @@ public final class SettingKeys {
     public static final String MULTIPLIER_LIGHT = "focus.reward.multiplier.light";
     public static final String MULTIPLIER_MEDIUM = "focus.reward.multiplier.medium";
     public static final String MULTIPLIER_STRICT = "focus.reward.multiplier.strict";
+    // Penalty
+    public static final String PENALTY_POINTS_MEDIUM = "focus.penalty.points.medium";
+    public static final String PENALTY_POINTS_STRICT = "focus.penalty.points.strict";
 }

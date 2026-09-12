@@ -9,7 +9,9 @@ import com.lorofy.server.features.focus.enums.SessionStatus;
 import com.lorofy.server.features.focus.service.FocusSessionService;
 import com.lorofy.server.features.profile.dto.CountryResponse;
 import com.lorofy.server.features.profile.dto.OnboardProfileRequest;
+import com.lorofy.server.features.profile.dto.PointHistoryResponse;
 import com.lorofy.server.features.profile.dto.ProfileResponse;
+import com.lorofy.server.features.profile.dto.StreakRepairRequest;
 import com.lorofy.server.features.profile.dto.UpdateProfileRequest;
 import com.lorofy.server.features.profile.service.ProfileService;
 
@@ -34,6 +36,13 @@ public class ProfileController {
     private final ProfileService profileService;
     private final FocusSessionService focusSessionService;
 
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<ProfileResponse>> getProfile(
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        ProfileResponse response = profileService.getProfile(currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success(response, "Get profile success"));
+    }
+
     @PutMapping("/onboard")
     public ResponseEntity<ApiResponse<ProfileResponse>> onboardProfile(
             @AuthenticationPrincipal UserPrincipal currentUser,
@@ -48,6 +57,23 @@ public class ProfileController {
             @Valid @RequestBody UpdateProfileRequest request) {
         ProfileResponse response = profileService.updateProfile(currentUser.getId(), request);
         return ResponseEntity.ok(ApiResponse.success(response, "Profile updated successfully"));
+    }
+
+    @PostMapping("/streak/repair")
+    public ResponseEntity<ApiResponse<ProfileResponse>> repairStreak(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @RequestBody StreakRepairRequest request) {
+        ProfileResponse response = focusSessionService.repairStreak(currentUser.getId(), request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Streak repaired successfully"));
+    }
+
+    @GetMapping("/points/history")
+    public ResponseEntity<ApiResponse<PageResponse<PointHistoryResponse>>> getPointHistory(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            Pageable pageable) {
+        PageResponse<PointHistoryResponse> response = focusSessionService.getPointHistory(
+                currentUser.getId(), pageable);
+        return ResponseEntity.ok(ApiResponse.success(response, "Get point history success"));
     }
 
     @GetMapping("/activities")

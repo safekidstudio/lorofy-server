@@ -1,5 +1,6 @@
 package com.lorofy.server.features.profile.service;
 
+import com.lorofy.server.features.focus.service.FocusSessionService;
 import com.lorofy.server.features.profile.dto.CountryResponse;
 import com.lorofy.server.features.profile.dto.OnboardProfileRequest;
 import com.lorofy.server.features.profile.dto.ProfileResponse;
@@ -25,6 +26,7 @@ public class ProfileService {
     private final CountryRepository countryRepository;
     private final MediaAssetRepository mediaAssetRepository;
     private final MediaAssetResolver mediaAssetResolver;
+    private final FocusSessionService focusSessionService;
 
     @Transactional
     public ProfileResponse onboardProfile(UUID userId, OnboardProfileRequest request) {
@@ -82,10 +84,11 @@ public class ProfileService {
         return mapToResponse(profile);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ProfileResponse getProfile(UUID userId) {
         Profile profile = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Hồ sơ người dùng không tồn tại"));
+        focusSessionService.evaluateAndRepairStreak(profile);
         return mapToResponse(profile);
     }
 
@@ -108,18 +111,29 @@ public class ProfileService {
 
     private ProfileResponse mapToResponse(Profile profile) {
         String avatarUrl = mediaAssetResolver.resolveUrl(profile.getAvatarAsset());
+        boolean canRepair = profile.getPreviousStreak() > 0;
+        int repairable = profile.getPreviousStreak();
+        int repairCost = 100;
 
         return ProfileResponse.builder()
                 .id(profile.getId())
                 .username(profile.getUsername())
                 .displayName(profile.getDisplayName())
-                .countryCode(profile.getCountry().getCode())
-                .countryName(profile.getCountry().getName())
+                .countryCode(profile.getCountry() != null ? profile.getCountry().getCode() : null)
+                .countryName(profile.getCountry() != null ? profile.getCountry().getName() : null)
                 .timezone(profile.getTimezone())
                 .isOnboarded(profile.isOnboarded())
                 .avatarUrl(avatarUrl)
                 .defaultBlockMode(profile.getDefaultBlockMode() != null ? profile.getDefaultBlockMode().name() : "MEDIUM")
                 .rankPoints(profile.getRankPoints())
+                .goldCoins(profile.getGoldCoins())
+                .totalFocusMinutes(profile.getTotalFocusMinutes())
+                .currentStreak(profile.getCurrentStreak())
+                .longestStreak(profile.getLongestStreak())
+                .streakFreezeCount(profile.getStreakFreezeCount())
+                .canRepairStreak(canRepair)
+                .repairableStreak(repairable)
+                .repairCostCoins(repairCost)
                 .build();
     }
 }

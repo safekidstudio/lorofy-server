@@ -17,4 +17,12 @@ public class ProfileResponse {
     private String avatarUrl;
     private String defaultBlockMode;
     private int rankPoints;
+    private int goldCoins;
+    private int totalFocusMinutes;
+    private int currentStreak;
+    private int longestStreak;
+    private int streakFreezeCount;
+    private boolean canRepairStreak;
+    private int repairableStreak;
+    private int repairCostCoins;
 }
