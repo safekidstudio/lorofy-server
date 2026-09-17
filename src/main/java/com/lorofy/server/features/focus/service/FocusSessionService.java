@@ -12,6 +12,8 @@ import java.util.stream.IntStream;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -100,6 +102,7 @@ public class FocusSessionService {
     }
 
     @Transactional
+    @CacheEvict(value = "focus-stats", key = "#userId")
     public FocusSessionResponse completeSession(UUID userId, UUID sessionId, EndSessionRequest request) {
         FocusSession session = getVerifiedSession(userId, sessionId);
         if (session.getStatus() != SessionStatus.RUNNING) {
@@ -161,6 +164,7 @@ public class FocusSessionService {
     }
 
     @Transactional
+    @CacheEvict(value = "focus-stats", key = "#userId")
     public FocusSessionResponse failSession(UUID userId, UUID sessionId, EndSessionRequest request) {
         FocusSession session = getVerifiedSession(userId, sessionId);
         if (session.getStatus() != SessionStatus.RUNNING) {
@@ -232,7 +236,8 @@ public class FocusSessionService {
     }
 
     // FOCUS SESSION STATS
-    @Transactional
+    @Transactional(readOnly = true)
+    @Cacheable(value = "focus-stats", key = "#userId")
     public FocusStatsResponse getStats(UUID userId) {
         Profile profile = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
@@ -300,11 +305,11 @@ public class FocusSessionService {
         Page<PointHistoryResponse> responsePage = page.map(session -> {
             boolean isPositive = session.getEarnedPoints() > 0;
             String type = isPositive ? "REWARD" : "PENALTY";
-            String title = isPositive ? "Hoàn thành tập trung" : "Bỏ cuộc giữa chừng";
-            String categoryName = session.getCategory() != null ? session.getCategory().getName() : "Khác";
+            String title = isPositive ? "Focus session completed" : "Session cancelled";
+            String categoryName = session.getCategory() != null ? session.getCategory().getName() : "Others";
             String description = !isPositive
-                    ? (session.getFailureReason() != null ? session.getFailureReason() : "Bấm bỏ cuộc trong phiên tập trung")
-                    : ("Tập trung " + session.getActualMinutes() + " phút (" + (session.getBlockMode() != null ? session.getBlockMode().name() : "") + ")");
+                    ? (session.getFailureReason() != null ? session.getFailureReason() : "Exited focus session")
+                    : ("Focused for " + session.getActualMinutes() + " minutes (" + (session.getBlockMode() != null ? session.getBlockMode().name() : "") + ")");
 
             return PointHistoryResponse.builder()
                     .id(session.getId())
@@ -397,6 +402,7 @@ public class FocusSessionService {
     }
 
     @Transactional
+    @CacheEvict(value = "focus-stats", key = "#userId")
     public ProfileResponse repairStreak(UUID userId, StreakRepairRequest request) {
         Profile profile = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
@@ -404,24 +410,24 @@ public class FocusSessionService {
         evaluateAndRepairStreak(profile);
 
         if (profile.getPreviousStreak() <= 0) {
-            throw new IllegalStateException("Không có streak nào có thể khôi phục");
+            throw new IllegalStateException("No streak available to repair");
         }
 
         int costCoins = 100;
 
         if (request.isUseFreezeItem()) {
             if (profile.getStreakFreezeCount() < 1) {
-                throw new IllegalArgumentException("Bạn không có đủ Lá Chắn Đóng Băng trong kho đồ");
+                throw new IllegalArgumentException("You do not have enough Streak Freeze items");
             }
             profile.setStreakFreezeCount(profile.getStreakFreezeCount() - 1);
             profile.setLastStreakFreezeUsed(OffsetDateTime.now());
         } else if (request.isUseCoins()) {
             if (profile.getGoldCoins() < costCoins) {
-                throw new IllegalArgumentException("Bạn không có đủ Gold Coins (Cần " + costCoins + " xu)");
+                throw new IllegalArgumentException("Insufficient Gold Coins (Requires " + costCoins + " coins)");
             }
             profile.setGoldCoins(profile.getGoldCoins() - costCoins);
         } else {
-            throw new IllegalArgumentException("Vui lòng chọn phương thức khôi phục (Lá Chắn hoặc Xu)");
+            throw new IllegalArgumentException("Please select a repair method (Streak Freeze item or Gold Coins)");
         }
 
         int restoredStreak = profile.getPreviousStreak();

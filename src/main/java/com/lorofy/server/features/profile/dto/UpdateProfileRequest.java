@@ -7,6 +7,9 @@ import lombok.Data;
 
 @Data
 public class UpdateProfileRequest {
+    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    private String username;
+
     @Size(min = 3, max = 100, message = "Display name must be between 3 and 100 characters")
     private String displayName;
     @Size(min = 3, max = 100, message = "Timezone must be between 3 and 100 characters")

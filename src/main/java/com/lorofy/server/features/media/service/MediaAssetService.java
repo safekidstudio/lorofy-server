@@ -22,7 +22,7 @@ public class MediaAssetService {
     public MediaAsset uploadAvatar(MultipartFile file, UUID userId) throws IOException {
         // Lấy Profile từ User ID ở tầng nghiệp vụ
         Profile profile = profileRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Hồ sơ người dùng không tồn tại"));
+                .orElseThrow(() -> new IllegalArgumentException("User profile not found"));
 
         // Gọi StorageService để upload file lên Cloudinary
         return storageService.upload(file, "avatars", profile.getId());

@@ -31,23 +31,39 @@ public class ProfileService {
     @Transactional
     public ProfileResponse onboardProfile(UUID userId, OnboardProfileRequest request) {
         Profile profile = profileRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Hồ sơ người dùng không tồn tại"));
+                .orElseThrow(() -> new IllegalArgumentException("User profile not found"));
 
-        // 1. Kiểm tra quốc gia có tồn tại trong danh mục không
+        // 1. Check if country exists
         Country country = countryRepository.findById(request.getCountryCode())
                 .orElseThrow(
-                        () -> new IllegalArgumentException("Mã quốc gia không hợp lệ: " + request.getCountryCode()));
+                        () -> new IllegalArgumentException("Invalid country code: " + request.getCountryCode()));
         profile.setCountry(country);
 
-        // 2. Nếu client gửi lên avatar ID, liên kết nó với Profile
+        // 2. Link avatar asset if provided
         if (request.getAvatarAssetId() != null) {
             MediaAsset avatar = mediaAssetRepository.findById(request.getAvatarAssetId())
-                    .orElseThrow(() -> new IllegalArgumentException("Ảnh đại diện không tồn tại"));
+                    .orElseThrow(() -> new IllegalArgumentException("Avatar asset not found"));
             profile.setAvatarAsset(avatar);
         }
 
-        // 3. Cập nhật các thông tin onboarding khác
-        profile.setDisplayName(request.getDisplayName());
+        // 3. Update username if provided
+        if (request.getUsername() != null && !request.getUsername().isBlank()) {
+            String newUsername = request.getUsername().trim();
+            if (!newUsername.equalsIgnoreCase(profile.getUsername())) {
+                if (profileRepository.existsByUsername(newUsername)) {
+                    throw new IllegalArgumentException("Username '" + newUsername + "' is already in use");
+                }
+                profile.setUsername(newUsername);
+            }
+        }
+
+        // 4. Update displayName if provided (fallback to username)
+        if (request.getDisplayName() != null && !request.getDisplayName().isBlank()) {
+            profile.setDisplayName(request.getDisplayName().trim());
+        } else if (profile.getDisplayName() == null || profile.getDisplayName().isBlank()) {
+            profile.setDisplayName(profile.getUsername());
+        }
+
         profile.setTimezone(request.getTimezone());
         profile.setOnboarded(true);
 
@@ -65,8 +81,18 @@ public class ProfileService {
             throw new IllegalArgumentException("Please onboard profile first");
         }
 
-        if (request.getDisplayName() != null) {
-            profile.setDisplayName(request.getDisplayName());
+        if (request.getUsername() != null && !request.getUsername().isBlank()) {
+            String newUsername = request.getUsername().trim();
+            if (!newUsername.equalsIgnoreCase(profile.getUsername())) {
+                if (profileRepository.existsByUsername(newUsername)) {
+                    throw new IllegalArgumentException("Username '" + newUsername + "' is already in use");
+                }
+                profile.setUsername(newUsername);
+            }
+        }
+
+        if (request.getDisplayName() != null && !request.getDisplayName().isBlank()) {
+            profile.setDisplayName(request.getDisplayName().trim());
         }
 
         if (request.getTimezone() != null) {
@@ -87,11 +113,12 @@ public class ProfileService {
     @Transactional
     public ProfileResponse getProfile(UUID userId) {
         Profile profile = profileRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Hồ sơ người dùng không tồn tại"));
+                .orElseThrow(() -> new IllegalArgumentException("User profile not found"));
         focusSessionService.evaluateAndRepairStreak(profile);
         return mapToResponse(profile);
     }
 
+    @org.springframework.cache.annotation.Cacheable(value = "countries", key = "'all'")
     @Transactional(readOnly = true)
     public List<CountryResponse> getCountries() {
         return countryRepository.findAll().stream()
@@ -115,10 +142,15 @@ public class ProfileService {
         int repairable = profile.getPreviousStreak();
         int repairCost = 100;
 
+        String displayName = profile.getDisplayName();
+        if (displayName == null || displayName.isBlank()) {
+            displayName = profile.getUsername();
+        }
+
         return ProfileResponse.builder()
                 .id(profile.getId())
                 .username(profile.getUsername())
-                .displayName(profile.getDisplayName())
+                .displayName(displayName)
                 .countryCode(profile.getCountry() != null ? profile.getCountry().getCode() : null)
                 .countryName(profile.getCountry() != null ? profile.getCountry().getName() : null)
                 .timezone(profile.getTimezone())

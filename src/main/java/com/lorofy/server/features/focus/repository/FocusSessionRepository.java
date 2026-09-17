@@ -24,11 +24,15 @@ public interface FocusSessionRepository extends JpaRepository<FocusSession, UUID
                         @Param("profileId") UUID profileId,
                         @Param("status") SessionStatus status);
 
-        @Query("SELECT f FROM FocusSession f WHERE f.profile.id = :profileId " +
-                        "AND (cast(:status as String) IS NULL OR f.status = :status) " +
+        @Query(value = "SELECT f FROM FocusSession f LEFT JOIN FETCH f.category WHERE f.profile.id = :profileId " +
+                        "AND (:status IS NULL OR f.status = :status) " +
                         "AND (cast(:startDate as timestamp) IS NULL OR f.endedAt >= :startDate) " +
                         "AND (cast(:endDate as timestamp) IS NULL OR f.endedAt <= :endDate) " +
-                        "ORDER BY f.createdAt DESC")
+                        "ORDER BY f.createdAt DESC",
+               countQuery = "SELECT COUNT(f) FROM FocusSession f WHERE f.profile.id = :profileId " +
+                        "AND (:status IS NULL OR f.status = :status) " +
+                        "AND (cast(:startDate as timestamp) IS NULL OR f.endedAt >= :startDate) " +
+                        "AND (cast(:endDate as timestamp) IS NULL OR f.endedAt <= :endDate)")
         Page<FocusSession> findFilteredActivities(
                         @Param("profileId") UUID profileId,
                         @Param("status") SessionStatus status,
@@ -40,7 +44,8 @@ public interface FocusSessionRepository extends JpaRepository<FocusSession, UUID
         List<FocusSession> findAllByProfileId(UUID profileId);
 
         // Get point history (sessions with earned_points != 0)
-        @Query("SELECT f FROM FocusSession f WHERE f.profile.id = :profileId AND f.earnedPoints <> 0 ORDER BY f.endedAt DESC")
+        @Query(value = "SELECT f FROM FocusSession f LEFT JOIN FETCH f.category WHERE f.profile.id = :profileId AND f.earnedPoints <> 0 ORDER BY f.endedAt DESC",
+               countQuery = "SELECT COUNT(f) FROM FocusSession f WHERE f.profile.id = :profileId AND f.earnedPoints <> 0")
         Page<FocusSession> findPointHistory(@Param("profileId") UUID profileId, Pageable pageable);
 
         // Get all sessions of user in specific date range

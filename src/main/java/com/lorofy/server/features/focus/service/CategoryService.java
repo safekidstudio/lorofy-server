@@ -7,6 +7,8 @@ import com.lorofy.server.features.focus.repository.CategoryRepository;
 import com.lorofy.server.features.profile.entity.Profile;
 import com.lorofy.server.features.profile.repository.ProfileRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,7 @@ public class CategoryService {
     private final CategoryRepository categoryRepository;
     private final ProfileRepository profileRepository;
 
+    @Cacheable(value = "user-categories", key = "#userId != null ? #userId : 'system'")
     @Transactional(readOnly = true)
     public List<CategoryResponse> getCategories(UUID userId) {
         List<Category> categories;
@@ -39,6 +42,7 @@ public class CategoryService {
                 .collect(Collectors.toList());
     }
 
+    @CacheEvict(value = "user-categories", key = "#userId")
     @Transactional
     public CategoryResponse createCategory(UUID userId, CreateCategoryRequest request) {
         Profile profile = profileRepository.findByUserId(userId)

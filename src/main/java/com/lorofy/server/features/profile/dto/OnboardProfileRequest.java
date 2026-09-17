@@ -8,7 +8,9 @@ import java.util.UUID;
 @Data
 public class OnboardProfileRequest {
 
-    @NotBlank(message = "Display name is required")
+    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
+    private String username;
+
     @Size(min = 3, max = 100, message = "Display name must be between 3 and 100 characters")
     private String displayName;
 

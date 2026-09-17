@@ -15,7 +15,7 @@ public class PointHistoryResponse {
     private UUID id;
     private String type; // "REWARD" or "PENALTY"
     private int points; // e.g. +30 or -20
-    private String title; // "Hoàn thành tập trung" or "Bỏ cuộc giữa chừng"
+    private String title; // "Focus session completed" or "Session cancelled"
     private String description;
     private String categoryName;
     private String blockMode;
