@@ -30,7 +30,8 @@ public class LeaderboardSseService implements MessageListener {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final RedisMessageListenerContainer redisMessageListenerContainer;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
 
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
 

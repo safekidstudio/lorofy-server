@@ -1,6 +1,7 @@
 package com.lorofy.server.features.profile.controller;
 
 import com.lorofy.server.core.infrastructure.idempotency.Idempotent;
+import com.lorofy.server.core.infrastructure.security.PublicEndpoint;
 import com.lorofy.server.core.infrastructure.security.UserPrincipal;
 import com.lorofy.server.core.response.ApiResponse;
 import com.lorofy.server.core.response.PageResponse;
@@ -107,6 +108,7 @@ public class ProfileController {
         return ResponseEntity.ok(ApiResponse.success(response, "Get focus calendar success"));
     }
 
+    @PublicEndpoint
     @GetMapping("/countries")
     public ResponseEntity<ApiResponse<List<CountryResponse>>> getCountries() {
         List<CountryResponse> response = profileService.getCountries();

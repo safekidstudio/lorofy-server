@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.stream.Collectors;
 import java.util.List;
 import java.util.UUID;
 
@@ -134,7 +135,7 @@ public class ProfileService {
                             .flagUrl(mediaAssetResolver.resolveUrl(flagAsset))
                             .build();
                 })
-                .toList();
+                .collect(Collectors.toList());
     }
 
     private ProfileResponse mapToResponse(Profile profile) {
