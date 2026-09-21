@@ -2,13 +2,17 @@ package com.lorofy.server.features.focus.dto;
 
 import com.lorofy.server.features.focus.enums.BlockMode;
 import com.lorofy.server.features.focus.enums.SessionStatus;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class FocusSessionResponse {
     private UUID id;
     private UUID profileId;
