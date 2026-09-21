@@ -18,6 +18,8 @@ import com.lorofy.server.features.focus.enums.SessionStatus;
 @Repository
 public interface FocusSessionRepository extends JpaRepository<FocusSession, UUID> {
 
+        boolean existsByProfileIdAndStatus(UUID profileId, SessionStatus status);
+
         // Get last completed session
         @Query("SELECT f FROM FocusSession f WHERE f.profile.id = :profileId AND f.status = :status ORDER BY f.endedAt DESC LIMIT 1")
         Optional<FocusSession> findLastCompletedSession(

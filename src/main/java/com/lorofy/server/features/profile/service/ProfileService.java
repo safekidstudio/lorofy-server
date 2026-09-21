@@ -13,6 +13,7 @@ import com.lorofy.server.core.infrastructure.storage.MediaAssetResolver;
 import com.lorofy.server.features.media.entity.MediaAsset;
 import com.lorofy.server.features.media.repository.MediaAssetRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
@@ -118,7 +119,7 @@ public class ProfileService {
         return mapToResponse(profile);
     }
 
-    @org.springframework.cache.annotation.Cacheable(value = "countries", key = "'all'")
+    @Cacheable(value = "countries", key = "'all'", sync = true)
     @Transactional(readOnly = true)
     public List<CountryResponse> getCountries() {
         return countryRepository.findAll().stream()

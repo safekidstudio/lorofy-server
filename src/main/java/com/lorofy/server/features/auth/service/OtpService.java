@@ -27,11 +27,13 @@ public class OtpService {
     public void generateOtpAndSendEmail(String email) {
         String cooldownKey = COOLDOWN_KEY_PREFIX + email;
 
-        // check cooldown
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
+        // Atomically set cooldown key if absent (SET NX EX 60)
+        Boolean isFirstRequest = redisTemplate.opsForValue().setIfAbsent(cooldownKey, "locked", Duration.ofSeconds(60));
+
+        if (Boolean.FALSE.equals(isFirstRequest)) {
             Long expire = redisTemplate.getExpire(cooldownKey);
             throw new IllegalStateException(
-                    "Please wait " + (expire != null ? expire : 60) + " seconds before sending OTP again.");
+                    "Please wait " + (expire != null && expire > 0 ? expire : 60) + " seconds before sending OTP again.");
         }
 
         // generate otp code
@@ -40,9 +42,6 @@ public class OtpService {
         // store otp code in redis with expiry time of 5 minutes
         String otpKey = OTP_KEY_PREFIX + email;
         redisTemplate.opsForValue().set(otpKey, otpCode, Duration.ofMinutes(5));
-
-        // set cooldown time in redis for 60 seconds
-        redisTemplate.opsForValue().set(cooldownKey, "locked", Duration.ofSeconds(60));
 
         // send email with otp code
         emailService.sendOtpEmail(email, otpCode);

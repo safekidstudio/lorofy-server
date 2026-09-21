@@ -1,20 +1,37 @@
 package com.lorofy.server.features.leaderboard.service;
 
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import org.springframework.data.redis.connection.Message;
+import org.springframework.data.redis.connection.MessageListener;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.listener.ChannelTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
+@RequiredArgsConstructor
 @Slf4j
-public class LeaderboardSseService {
+public class LeaderboardSseService implements MessageListener {
+
+    private static final String TOPIC = "lorofy:leaderboard:updates";
+
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final RedisMessageListenerContainer redisMessageListenerContainer;
+    private final ObjectMapper objectMapper;
+
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
 
     public record LeaderboardUpdateEvent(
@@ -24,6 +41,12 @@ public class LeaderboardSseService {
         String avatarUrl,
         int earnedPoints
     ) {}
+
+    @PostConstruct
+    public void init() {
+        redisMessageListenerContainer.addMessageListener(this, new ChannelTopic(TOPIC));
+        log.info("Subscribed LeaderboardSseService to Redis topic: {}", TOPIC);
+    }
 
     public SseEmitter registerClient() {
         SseEmitter emitter = new SseEmitter(30 * 60 * 1000L); // 30 minutes timeout
@@ -43,6 +66,30 @@ public class LeaderboardSseService {
     }
 
     public void broadcastUpdate(LeaderboardUpdateEvent event) {
+        try {
+            // Publish event to Redis Pub/Sub channel for multi-node distribution
+            redisTemplate.convertAndSend(TOPIC, event);
+        } catch (Exception e) {
+            log.error("Failed to publish LeaderboardUpdateEvent to Redis topic", e);
+            // Fallback: send directly to local emitters
+            sendToLocalEmitters(event);
+        }
+    }
+
+    @Override
+    public void onMessage(Message message, byte[] pattern) {
+        try {
+            LeaderboardUpdateEvent event = objectMapper.readValue(message.getBody(), LeaderboardUpdateEvent.class);
+            sendToLocalEmitters(event);
+        } catch (Exception e) {
+            log.error("Failed to deserialize Redis Pub/Sub LeaderboardUpdateEvent", e);
+        }
+    }
+
+    private void sendToLocalEmitters(LeaderboardUpdateEvent event) {
+        if (emitters.isEmpty()) {
+            return;
+        }
         List<SseEmitter> deadEmitters = new ArrayList<>();
         for (SseEmitter emitter : emitters) {
             try {
@@ -51,7 +98,9 @@ public class LeaderboardSseService {
                 deadEmitters.add(emitter);
             }
         }
-        emitters.removeAll(deadEmitters);
+        if (!deadEmitters.isEmpty()) {
+            emitters.removeAll(deadEmitters);
+        }
     }
 
     @Scheduled(fixedRate = 20000) // every 20 seconds

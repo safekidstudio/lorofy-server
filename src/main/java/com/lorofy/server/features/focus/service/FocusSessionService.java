@@ -32,16 +32,15 @@ import com.lorofy.server.features.focus.enums.BlockMode;
 import com.lorofy.server.features.focus.enums.SessionStatus;
 import com.lorofy.server.features.focus.repository.CategoryRepository;
 import com.lorofy.server.features.focus.repository.FocusSessionRepository;
-import java.time.ZoneOffset;
 import com.lorofy.server.core.infrastructure.storage.MediaAssetResolver;
-import com.lorofy.server.features.leaderboard.service.LeaderboardSseService;
-import com.lorofy.server.features.leaderboard.service.LeaderboardSseService.LeaderboardUpdateEvent;
-import com.lorofy.server.features.leaderboard.service.RedisLeaderboardHelper;
 import com.lorofy.server.features.profile.entity.Profile;
 import com.lorofy.server.features.profile.repository.ProfileRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.context.ApplicationEventPublisher;
+import com.lorofy.server.features.focus.event.FocusSessionCompletedEvent;
 
 @Service
 @RequiredArgsConstructor
@@ -51,14 +50,17 @@ public class FocusSessionService {
     private final CategoryRepository categoryRepository;
     private final ProfileRepository profileRepository;
     private final SettingService settingService;
-    private final LeaderboardSseService leaderboardSseService;
     private final MediaAssetResolver mediaAssetResolver;
-    private final RedisLeaderboardHelper redisLeaderboardHelper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public FocusSessionResponse startSession(UUID userId, StartSessionRequest request) {
         Profile profile = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
+
+        if (focusSessionRepository.existsByProfileIdAndStatus(profile.getId(), SessionStatus.RUNNING)) {
+            throw new IllegalStateException("You already have an active focus session in progress");
+        }
 
         Category category = null;
         if (request.getCategoryId() != null) {
@@ -135,30 +137,16 @@ public class FocusSessionService {
         updateSreak(profile);
         session = focusSessionRepository.save(session);
 
-        try {
-            LocalDate today = LocalDate.now(ZoneOffset.UTC);
-            String countryCode = profile.getCountry() != null ? profile.getCountry().getCode() : null;
-            List<String> activeKeys = redisLeaderboardHelper.getActiveKeys(today, countryCode);
-            for (String key : activeKeys) {
-                redisLeaderboardHelper.incrementScoreIfKeyExists(key, profile.getId(), earnedPoints);
-            }
-        } catch (Exception e) {
-            log.error("Failed to update scores in Redis", e);
-        }
-
-        try {
-            String avatarUrl = mediaAssetResolver.resolveUrl(profile.getAvatarAsset());
-            LeaderboardUpdateEvent event = new LeaderboardUpdateEvent(
-                profile.getId(),
-                profile.getUsername(),
-                profile.getDisplayName(),
-                avatarUrl,
-                earnedPoints
-            );
-            leaderboardSseService.broadcastUpdate(event);
-        } catch (Exception e) {
-            log.error("Failed to broadcast leaderboard update via SSE", e);
-        }
+        String countryCode = profile.getCountry() != null ? profile.getCountry().getCode() : null;
+        String avatarUrl = mediaAssetResolver.resolveUrl(profile.getAvatarAsset());
+        eventPublisher.publishEvent(new FocusSessionCompletedEvent(
+            profile.getId(),
+            profile.getUsername(),
+            profile.getDisplayName(),
+            avatarUrl,
+            countryCode,
+            earnedPoints
+        ));
 
         return mapToResponse(session);
     }
@@ -199,16 +187,16 @@ public class FocusSessionService {
             profile.setRankPoints(updatedPoints);
             profileRepository.save(profile);
 
-            try {
-                LocalDate today = LocalDate.now(ZoneOffset.UTC);
-                String countryCode = profile.getCountry() != null ? profile.getCountry().getCode() : null;
-                List<String> activeKeys = redisLeaderboardHelper.getActiveKeys(today, countryCode);
-                for (String key : activeKeys) {
-                    redisLeaderboardHelper.incrementScoreIfKeyExists(key, profile.getId(), -penaltyPoints);
-                }
-            } catch (Exception e) {
-                log.error("Failed to deduct score in Redis leaderboard", e);
-            }
+            String countryCode = profile.getCountry() != null ? profile.getCountry().getCode() : null;
+            String avatarUrl = mediaAssetResolver.resolveUrl(profile.getAvatarAsset());
+            eventPublisher.publishEvent(new FocusSessionCompletedEvent(
+                profile.getId(),
+                profile.getUsername(),
+                profile.getDisplayName(),
+                avatarUrl,
+                countryCode,
+                -penaltyPoints
+            ));
         }
 
         session = focusSessionRepository.save(session);
@@ -237,7 +225,7 @@ public class FocusSessionService {
 
     // FOCUS SESSION STATS
     @Transactional(readOnly = true)
-    @Cacheable(value = "focus-stats", key = "#userId")
+    @Cacheable(value = "focus-stats", key = "#userId", sync = true)
     public FocusStatsResponse getStats(UUID userId) {
         Profile profile = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
@@ -404,7 +392,7 @@ public class FocusSessionService {
     @Transactional
     @CacheEvict(value = "focus-stats", key = "#userId")
     public ProfileResponse repairStreak(UUID userId, StreakRepairRequest request) {
-        Profile profile = profileRepository.findByUserId(userId)
+        Profile profile = profileRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
 
         evaluateAndRepairStreak(profile);

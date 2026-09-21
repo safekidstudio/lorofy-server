@@ -3,9 +3,11 @@ package com.lorofy.server.features.profile.repository;
 import java.util.Optional;
 import java.util.UUID;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,6 +17,10 @@ import com.lorofy.server.features.profile.entity.Profile;
 @Repository
 public interface ProfileRepository extends JpaRepository<Profile, UUID> {
     Optional<Profile> findByUserId(UUID userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Profile p WHERE p.user.id = :userId")
+    Optional<Profile> findByUserIdWithLock(@Param("userId") UUID userId);
 
     boolean existsByUsername(String username);
 

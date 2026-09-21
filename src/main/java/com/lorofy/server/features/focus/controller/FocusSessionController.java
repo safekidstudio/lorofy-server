@@ -23,6 +23,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+import com.lorofy.server.core.infrastructure.idempotency.Idempotent;
+
 @RestController
 @RequestMapping("/focus")
 @RequiredArgsConstructor
@@ -47,6 +49,7 @@ public class FocusSessionController {
         return ResponseEntity.ok(ApiResponse.success(response, "Session paused successfully"));
     }
 
+    @Idempotent
     @PostMapping("/{sessionId}/complete")
     public ResponseEntity<ApiResponse<FocusSessionResponse>> completeSession(
             @AuthenticationPrincipal UserPrincipal currentUser,
@@ -56,6 +59,7 @@ public class FocusSessionController {
         return ResponseEntity.ok(ApiResponse.success(response, "Session completed successfully"));
     }
 
+    @Idempotent
     @PostMapping("/{sessionId}/fail")
     public ResponseEntity<ApiResponse<FocusSessionResponse>> failSession(
             @AuthenticationPrincipal UserPrincipal currentUser,
