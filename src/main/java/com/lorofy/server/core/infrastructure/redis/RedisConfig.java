@@ -2,7 +2,6 @@ package com.lorofy.server.core.infrastructure.redis;
 
 import java.time.Duration;
 
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -12,14 +11,15 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
+import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import lombok.extern.slf4j.Slf4j;
@@ -31,21 +31,26 @@ public class RedisConfig {
 
     @Bean
     public ObjectMapper redisObjectMapper() {
+        PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
+                .allowIfSubType("com.lorofy.server.")
+                .allowIfSubType("java.util.")
+                .allowIfSubTypeIsArray()
+                .build();
+
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         objectMapper.activateDefaultTyping(
-                LaissezFaireSubTypeValidator.instance,
-                ObjectMapper.DefaultTyping.EVERYTHING,
-                JsonTypeInfo.As.WRAPPER_ARRAY
+                ptv,
+                ObjectMapper.DefaultTyping.NON_FINAL,
+                JsonTypeInfo.As.PROPERTY
         );
         return objectMapper;
     }
 
     @Bean
-    @SuppressWarnings("removal")
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory, ObjectMapper redisObjectMapper) {
-        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(redisObjectMapper);
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisSerializer<Object> serializer = RedisSerializer.json();
 
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
@@ -59,9 +64,8 @@ public class RedisConfig {
     }
 
     @Bean
-    @SuppressWarnings("removal")
-    public CacheManager cacheManager(RedisConnectionFactory connectionFactory, ObjectMapper redisObjectMapper) {
-        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(redisObjectMapper);
+    public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+        RedisSerializer<Object> serializer = RedisSerializer.json();
 
         RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofHours(1))
@@ -83,16 +87,19 @@ public class RedisConfig {
     }
 
     /**
-     * Startup runner to flush all stale/corrupted cache keys from previous deployments
+     * Clear specific spring read-through caches on startup to evict stale entries from previous deployments safely without affecting OTP/Sessions.
      */
     @Bean
-    public ApplicationRunner clearStaleRedisCacheOnStartup(RedisConnectionFactory connectionFactory) {
+    public org.springframework.boot.ApplicationRunner clearSpringCacheOnStartup(CacheManager cacheManager) {
         return args -> {
             try {
-                connectionFactory.getConnection().serverCommands().flushAll();
-                log.info("Flushed ALL Redis keys on startup to clear stale cache.");
+                var cache = cacheManager.getCache("countries");
+                if (cache != null) {
+                    cache.clear();
+                    log.info("Successfully cleared 'countries' cache on startup.");
+                }
             } catch (Exception e) {
-                log.warn("Could not auto-flush Redis on startup: {}", e.getMessage());
+                log.warn("Could not clear 'countries' cache on startup: {}", e.getMessage());
             }
         };
     }
