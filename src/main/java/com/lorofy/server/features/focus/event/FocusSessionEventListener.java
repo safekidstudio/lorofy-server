@@ -30,9 +30,20 @@ public class FocusSessionEventListener {
         if (event.earnedPoints() != 0) {
             try {
                 LocalDate today = LocalDate.now(ZoneOffset.UTC);
-                List<String> activeKeys = redisLeaderboardHelper.getActiveKeys(today, event.countryCode());
-                for (String key : activeKeys) {
-                    redisLeaderboardHelper.incrementScoreIfKeyExists(key, event.profileId(), event.earnedPoints());
+                if (event.earnedPoints() < 0) {
+                    // Penalty points only affect all-time leaderboard (clamped at 0)
+                    String allTimeKey = redisLeaderboardHelper.getAllTimeKey(null);
+                    redisLeaderboardHelper.incrementScoreIfKeyExists(allTimeKey, event.profileId(), event.earnedPoints());
+                    if (event.countryCode() != null && !event.countryCode().isBlank()) {
+                        String countryKey = redisLeaderboardHelper.getAllTimeKey(event.countryCode());
+                        redisLeaderboardHelper.incrementScoreIfKeyExists(countryKey, event.profileId(), event.earnedPoints());
+                    }
+                } else {
+                    // Reward points affect all active keys (all-time, today, week, month)
+                    List<String> activeKeys = redisLeaderboardHelper.getActiveKeys(today, event.countryCode());
+                    for (String key : activeKeys) {
+                        redisLeaderboardHelper.incrementScoreIfKeyExists(key, event.profileId(), event.earnedPoints());
+                    }
                 }
             } catch (Exception e) {
                 log.error("Failed to update scores in Redis after transaction commit", e);

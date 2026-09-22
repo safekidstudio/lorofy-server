@@ -77,7 +77,10 @@ public class RedisLeaderboardHelper {
     public void incrementScoreIfKeyExists(String key, UUID profileId, double points) {
         try {
             if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
-                redisTemplate.opsForZSet().incrementScore(key, profileId.toString(), points);
+                Double newScore = redisTemplate.opsForZSet().incrementScore(key, profileId.toString(), points);
+                if (newScore != null && newScore < 0) {
+                    redisTemplate.opsForZSet().add(key, profileId.toString(), 0.0);
+                }
             }
         } catch (Exception e) {
             log.error("Failed to increment score in Redis for key: {}", key, e);
